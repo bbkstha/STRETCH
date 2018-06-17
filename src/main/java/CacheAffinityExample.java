@@ -25,7 +25,7 @@ public final class CacheAffinityExample {
      * @param args Command line arguments, none required.
      */
     public static void main(String[] args) {
-        try (Ignite ignite = Ignition.start("/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-fabric-2.2.0-bin/examples/config/example-ignite.xml")) {
+        try (Ignite ignite = Ignition.start("/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-fabric-2.2.0-bin/config/default-config.xml")) {
             System.out.println();
             System.out.println(">>> Cache affinity example started.");
 
@@ -85,7 +85,7 @@ public final class CacheAffinityExample {
 //            keys.add(i);
 //
 //        // Map all keys to nodes.
-//        Map<ClusterNode, Collection<Integer>> mappings = ignite.cluster().mapKeysToNodes(CACHE_NAME, keys);
+//        Map<ClusterNode, Collection<Integer>> mappings = ignite.cluster()..mapKeysToNodes(CACHE_NAME, keys);
 //
 //        for (Map.Entry<ClusterNode, Collection<Integer>> mapping : mappings.entrySet()) {
 //            ClusterNode node = mapping.getKey();
