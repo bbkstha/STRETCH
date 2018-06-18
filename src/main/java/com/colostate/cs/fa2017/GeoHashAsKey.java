@@ -37,7 +37,7 @@ public class GeoHashAsKey {
 
         // Start Ignite node.
         //Ignition.start(cfg);
-        Ignite ignite = Ignition.start("/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-fabric-2.2.0-bin/config/default-config.xml");
+        Ignite ignite = Ignition.start("/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-fabric-2.2.0-bin/examples/config/example-memory-policies.xml");
 
             try (IgniteCache<String, String> cache = ignite.getOrCreateCache(cacheName)) {
                 // Clear caches before running example.
@@ -77,11 +77,17 @@ public class GeoHashAsKey {
                     rndParts.add(i);
                 // Getting partition to node mapping.
                 Map<Integer, ClusterNode> partPerNodes = affinity.mapPartitionsToNodes(rndParts);
-                System.out.println("The partition->node map gives: "+partPerNodes.size());
+                //System.out.println("The partition->node map gives: "+partPerNodes.size());
                 for (Map.Entry<Integer, ClusterNode> entry : partPerNodes.entrySet()) {
-                    System.out.println("Key = " + entry.getKey() + ", Value = " + entry.getValue());
+                    //System.out.println("Key = " + entry.getKey() + ", Value = " + entry.getValue());
                 }
-                cache.localSizeLong(CachePeekMode.ALL);
+                int primaryCacheSize = cache.size(CachePeekMode.PRIMARY);
+                //System.out.println("The size of primary cache entities is: "+primaryCacheSize);
+
+                for(int i =0; i<1024; i++)
+                    System.out.println("Partition: "+i+". NumberofEntries: "+cache.sizeLong(i, CachePeekMode.PRIMARY));
+
+
 
                 ignite.close();
 
