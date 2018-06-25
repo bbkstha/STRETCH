@@ -55,5 +55,14 @@
     <orderEntry type="library" name="Maven: org.apache.commons:commons-rng-client-api:1.0" level="project" />
     <orderEntry type="library" name="Maven: org.apache.commons:commons-rng-simple:1.0" level="project" />
     <orderEntry type="library" name="Maven: com.zaxxer:SparseBitSet:1.0" level="project" />
+    <orderEntry type="module-library">
+      <library>
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/../ignite-geohash-api/target/ignite-geohash-1.0-SNAPSHOT.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES />
+      </library>
+    </orderEntry>
   </component>
 </module>
