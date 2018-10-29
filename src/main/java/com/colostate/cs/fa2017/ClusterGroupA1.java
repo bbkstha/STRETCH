@@ -19,12 +19,14 @@ public class ClusterGroupA1 {
         CacheConfiguration cacheCfg = new CacheConfiguration("MyCache");
         cacheCfg.setCacheMode(CacheMode.PARTITIONED);
 
+
         Map<String, String> userAtt = new HashMap<String, String>(){{put("group","A");
             put("role", "worker");}};
 
         IgniteConfiguration cfg = new IgniteConfiguration();
         cfg.setCacheConfiguration(cacheCfg);
         cfg.setUserAttributes(userAtt);
+
 
         //CacheConfiguration<GeoHashAsKey.GeoEntry, String>  cacheCfg1 = new CacheConfiguration(cacheName);
 

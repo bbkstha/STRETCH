@@ -1,9 +1,6 @@
 package com.colostate.cs.fa2017;
 
-import org.apache.ignite.Ignite;
-import org.apache.ignite.IgniteCache;
-import org.apache.ignite.IgniteCompute;
-import org.apache.ignite.Ignition;
+import org.apache.ignite.*;
 import ch.hsr.geohash.GeoHash;
 import org.apache.ignite.cache.CacheEntry;
 import org.apache.ignite.cache.CacheMetrics;
@@ -63,11 +60,29 @@ public class GeoHashAsKey {
 
         ClusterGroup clusterGroupA = cluster.forAttribute("group", "A");
         ClusterGroup clusterGroupB = cluster.forAttribute("group", "B");
+        ClusterGroup clusterGroupC = cluster.forAttribute("group", "C");
+
         ClusterNode groupAMaster = clusterGroupA.forAttribute("role", "master").node();
-        ClusterGroup groupAWorker = clusterGroupB.forAttribute("role", "worker");
+        ClusterGroup groupAWorkers = clusterGroupB.forAttribute("role", "worker");
+        ClusterNode groupBMaster = clusterGroupA.forAttribute("role", "master").node();
+        ClusterGroup groupBWorkers = clusterGroupB.forAttribute("role", "worker");
 
         Collection<ClusterNode> workers = clusterGroupA.nodes();
         System.out.println("The Number of nodes in Group A is: "+workers.size());
+
+        UUID masterAID = groupAMaster.id();
+        UUID masterBID = groupBMaster.id();
+        UUID masterCID = groupBMaster.id();
+
+
+
+        IgniteMessaging groupMastersMessage = ignite.message(cluster.forClients());
+
+
+
+        IgniteMessaging messagingGroupA = ignite.message(clusterGroupA);
+        IgniteMessaging messagingGroupB = ignite.message(clusterGroupB);
+
 
 
 
@@ -89,11 +104,11 @@ public class GeoHashAsKey {
                 Integer counter = 0;
                 int duplicate = 0;
                 //Read File Line By Line
-                while ((strLine = br.readLine()) != null) {
+                while ((strLine = br.readLine()) != null){
                     // Print the content on the console
                     //System.out.println(strLine);
 
-                    if (!strLine.startsWith("LON")) {
+                    if (!strLine.startsWith("LON")){
 
 
 
