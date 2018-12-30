@@ -10,7 +10,7 @@ public class CharacterCount {
 
     public static void main(String[] args) throws Exception {
 
-    Ignite ignite = Ignition.start("/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-fabric-2.2.0-bin/examples/config/example-ignite.xml");
+    Ignite ignite = Ignition.start("/s/chopin/b/grad/bbkstha/IdeaProjects/IgniteExamples/src/main/resources/example-ignite.xml");
         Collection<IgniteCallable<Integer>> calls = new ArrayList();
 
         // Iterate through all the words in the sentence and create Callable jobs.

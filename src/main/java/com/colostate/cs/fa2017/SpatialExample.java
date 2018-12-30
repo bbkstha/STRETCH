@@ -1,40 +1,40 @@
-import com.vividsolutions.jts.geom.*;
-import com.vividsolutions.jts.io.*;
-import org.apache.ignite.*;
+package com.colostate.cs.fa2017;
+
+import com.vividsolutions.jts.geom.Geometry;
+import com.vividsolutions.jts.io.WKTReader;
+import org.apache.ignite.Ignite;
+import org.apache.ignite.IgniteCache;
+import org.apache.ignite.Ignition;
 import org.apache.ignite.cache.query.SqlQuery;
-import org.apache.ignite.cache.query.annotations.*;
-import org.apache.ignite.configuration.*;
+import org.apache.ignite.cache.query.annotations.QuerySqlField;
+import org.apache.ignite.configuration.CacheConfiguration;
+import org.apache.ignite.configuration.IgniteConfiguration;
 
-import javax.cache.*;
-import java.util.*;
+import javax.cache.Cache;
+import java.util.Collection;
+import java.util.Random;
 
-/**
- * This examples shows the usage of geospatial queries and indexes in Apache Ignite.
- * For more information please refer to the following documentation:
- * http://apacheignite.gridgain.org/v1.7/docs/geospatial-queries
- */
-public class SpatialQueryExample {
-    /** Cache name. */
-    private static final String CACHE_NAME = SpatialQueryExample.class.getSimpleName();
+public class SpatialExample {
 
-    /**
-     * @param args Command line arguments, none required.
-     */
+    private static final String CACHE_NAME = "MyCache";
+
     public static void main(String[] args) throws Exception {
         // Starting Ignite node.
-            // Preparing the cache configuration.
-            CacheConfiguration<Integer, MapPoint> cc = new CacheConfiguration<>(CACHE_NAME);
+        // Preparing the cache configuration.
+        CacheConfiguration<Integer, SpatialExample.MapPoint> cc = new CacheConfiguration<>(CACHE_NAME);
 
-            // Setting the indexed types.
-            cc.setIndexedTypes(Integer.class, MapPoint.class);
-            IgniteConfiguration igcfg = new IgniteConfiguration();
-            igcfg.setCacheConfiguration(cc);
+        Ignite ignite = Ignition.start("/s/chopin/b/grad/bbkstha/IdeaProjects/IgniteExamples/src/main/resources/example-ignite.xml");
 
-        try (Ignite ignite = Ignition.start(igcfg)) {
+        // Setting the indexed types.
+        cc.setIndexedTypes(Integer.class, SpatialExample.MapPoint.class);
+        //IgniteConfiguration igcfg = new IgniteConfiguration();
+        ignite.addCacheConfiguration(cc);
+
+        //try (Ignite ignite = Ignition.start(igcfg)) {
 
             System.out.println("Creating Cache...");
             // Starting the cache.
-            try (IgniteCache<Integer, MapPoint> cache = ignite.getOrCreateCache(CACHE_NAME)) {
+            try (IgniteCache<Integer, SpatialExample.MapPoint> cache = ignite.getOrCreateCache(CACHE_NAME)) {
 
                 System.out.println("Created Cache.");
                 Random rnd = new Random();
@@ -48,11 +48,11 @@ public class SpatialQueryExample {
 
                     Geometry geo = r.read("POINT(" + x + " " + y + ")");
 
-                    cache.put(i, new MapPoint(geo));
+                    cache.put(i, new SpatialExample.MapPoint(geo));
                 }
 
                 // Query to fetch the points that fit into a specific polygon.
-                SqlQuery<Integer, MapPoint> query = new SqlQuery<>(MapPoint.class, "coords && ?");
+                SqlQuery<Integer, SpatialExample.MapPoint> query = new SqlQuery<>(SpatialExample.MapPoint.class, "coords && ?");
 
                 // Selecting points that fit into a specific polygon.
                 for (int i = 0; i < 10; i++) {
@@ -62,14 +62,14 @@ public class SpatialQueryExample {
                             rnd.nextInt(10000) + " 0, 0 0))");
 
                     // Executing the query.
-                    Collection<Cache.Entry<Integer, MapPoint>> entries = cache.query(query.setArgs(cond)).getAll();
+                    //Collection<Cache.Entry<Integer, SpatialExample.MapPoint>> entries = cache.query(query.setArgs(cond)).getAll();
 
                     // Printing number of points that fit into the area defined by the polygon.
-                    System.out.println("Fetched points [cond=" + cond + ", cnt=" + entries.size() + ']');
+                    //System.out.println("Fetched points [cond=" + cond + ", cnt=" + entries.size() + ']');
                 }
             }
         }
-    }
+   // }
 
     /**
      * MapPoint with indexed coordinates.
@@ -87,3 +87,4 @@ public class SpatialQueryExample {
         }
     }
 }
+

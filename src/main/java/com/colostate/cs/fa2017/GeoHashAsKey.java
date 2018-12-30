@@ -67,6 +67,11 @@ public class GeoHashAsKey {
         ClusterNode groupBMaster = clusterGroupA.forAttribute("role", "master").node();
         ClusterGroup groupBWorkers = clusterGroupB.forAttribute("role", "worker");
 
+        ClusterGroup groupOfMasters = cluster.forAttribute("role", "master");
+
+
+
+
         Collection<ClusterNode> workers = clusterGroupA.nodes();
         System.out.println("The Number of nodes in Group A is: "+workers.size());
 
