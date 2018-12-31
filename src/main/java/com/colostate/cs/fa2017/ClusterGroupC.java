@@ -13,7 +13,7 @@ import org.apache.ignite.configuration.IgniteConfiguration;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class ClusterGroupA {
+public class ClusterGroupC {
 
     private static final String REQUEST_TOPIC = "NEED_RESOURCES";
     private static final String SERVICE_TOPIC = "GOT_RESOURCES";
@@ -30,7 +30,7 @@ public class ClusterGroupA {
 
 
         Map<String, String> userAtt = new HashMap<String, String>() {{
-            put("group", "A");
+            put("group", "C");
             put("role", "master");
         }};
 
@@ -45,13 +45,13 @@ public class ClusterGroupA {
         // Start Ignite node.
         Ignite ignite = Ignition.start(cfg);
 
-        ClusterGroup groupACluster = ignite.cluster().forAttribute("group", "A");
+        ClusterGroup groupCCluster = ignite.cluster().forAttribute("group", "C");
         //ClusterGroup groupAWorkers = clusterGroupA.forAttribute("role", "worker");
         //Collection<ClusterNode> workerNodes = groupAWorkers.nodes();
 
 
-        AtomicReference<ClusterGroup> groupAWorkers = new AtomicReference<>(ignite.cluster().forAttribute("group", "A").forAttribute("role", "worker"));
-        ClusterMetrics metrics = groupAWorkers.get().metrics();
+        AtomicReference<ClusterGroup> groupCWorkers = new AtomicReference<>(ignite.cluster().forAttribute("group", "A").forAttribute("role", "worker"));
+        ClusterMetrics metrics = groupCWorkers.get().metrics();
 
         long offHeapUsed = metrics.getNonHeapMemoryUsed();
         long heapUsed = metrics.getHeapMemoryUsed();
@@ -62,7 +62,7 @@ public class ClusterGroupA {
         //Message sent to all sub-clusters' masters.
         //TOPIC="Resource Requried"
         //Use the avg metrices of the given sub-cluster to trigger the event.
-        UUID myID = groupACluster.forClients().node().id();
+        UUID myID = groupCCluster.forClients().node().id();
         System.out.println("My node id is: "+myID);
 
         ClusterGroup clientGroup = ignite.cluster().forAttribute("role","master");
@@ -73,7 +73,7 @@ public class ClusterGroupA {
 //        UUID senderID = startListening(ignite, clientGroup);
 
 
-        ClusterNode donatedNode = groupACluster.forOldest().node();
+        ClusterNode donatedNode = groupCCluster.forOldest().node();
 
         System.out.println("The node to be donated is: " + donatedNode.id());
         System.out.println("The node to be donated is: " + donatedNode.consistentId());
@@ -87,7 +87,7 @@ public class ClusterGroupA {
                 groupMastersMessage.send(SERVICE_TOPIC, donatedNode.id());
                 //Remove donated node from the cluster group.
 
-                Collection<ClusterNode>coll = groupAWorkers.get().nodes();
+                Collection<ClusterNode>coll = groupCWorkers.get().nodes();
 
                 Collection<UUID> uuidColl = new ArrayList<>();
 
@@ -99,7 +99,7 @@ public class ClusterGroupA {
                 System.out.println("The size of uuidcoll A was :"+uuidColl.size());
                 uuidColl.remove(donatedNode.id());
                 System.out.println("The size of uuidcoll A is :"+uuidColl.size());
-                groupAWorkers.set(ignite.cluster().forNodeIds(uuidColl));
+                groupCWorkers.set(ignite.cluster().forNodeIds(uuidColl));
 
             //}
             return true;

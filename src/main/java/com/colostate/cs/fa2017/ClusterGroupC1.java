@@ -6,12 +6,11 @@ import org.apache.ignite.Ignition;
 import org.apache.ignite.cache.CacheMode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
-import org.apache.ignite.lang.IgniteProductVersion;
 
 import java.util.HashMap;
 import java.util.Map;
 
-public class ClusterGroupA1 {
+public class ClusterGroupC1 {
 
     public static void main(String[] args) {
 
@@ -21,7 +20,7 @@ public class ClusterGroupA1 {
         cacheCfg.setCacheMode(CacheMode.PARTITIONED);
 
 
-        Map<String, String> userAtt = new HashMap<String, String>(){{put("group","A");
+        Map<String, String> userAtt = new HashMap<String, String>(){{put("group","C");
             put("role", "worker");}};
 
         IgniteConfiguration cfg = new IgniteConfiguration();
