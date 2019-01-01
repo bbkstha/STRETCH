@@ -32,9 +32,9 @@ public class GeoHashAsKey {
     public static void main(String[] args) {
 
 
-        String cacheName = "myCustomCache";
+        String cacheName = "MyCache";
 
-        CacheConfiguration cacheCfg = new CacheConfiguration("myCache");
+        CacheConfiguration cacheCfg = new CacheConfiguration("MyCache");
         cacheCfg.setCacheMode(CacheMode.PARTITIONED);
 
         //Map<String, String> userAtt = new HashMap<String, String>(){{put("group","A");}};
@@ -69,15 +69,17 @@ public class GeoHashAsKey {
 
         ClusterGroup groupOfMasters = cluster.forAttribute("role", "master");
 
+        System.out.println("The number of masters: "+groupOfMasters.nodes().size());
+
 
 
 
         Collection<ClusterNode> workers = clusterGroupA.nodes();
         System.out.println("The Number of nodes in Group A is: "+workers.size());
 
-        UUID masterAID = groupAMaster.id();
-        UUID masterBID = groupBMaster.id();
-        UUID masterCID = groupBMaster.id();
+//        UUID masterAID = groupAMaster.id();
+//        UUID masterBID = groupBMaster.id();
+//        UUID masterCID = groupBMaster.id();
 
 
 
@@ -93,7 +95,7 @@ public class GeoHashAsKey {
 
 
 
-        try (IgniteCache<Object, String> cache = ignite.getOrCreateCache(cacheName)) {
+        try (IgniteCache<Object, String> cache = groupOfMasters.ignite().getOrCreateCache(cacheName)) {
 //                // Clear caches before running example.
                 cache.clear();
 //                Affinity<Object> affinity = ignite.affinity(cacheName);

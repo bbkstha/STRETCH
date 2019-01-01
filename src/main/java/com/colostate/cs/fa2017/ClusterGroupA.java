@@ -45,6 +45,7 @@ public class ClusterGroupA {
         // Start Ignite node.
         Ignite ignite = Ignition.start(cfg);
 
+
         ClusterGroup groupACluster = ignite.cluster().forAttribute("group", "A");
         //ClusterGroup groupAWorkers = clusterGroupA.forAttribute("role", "worker");
         //Collection<ClusterNode> workerNodes = groupAWorkers.nodes();
@@ -58,6 +59,7 @@ public class ClusterGroupA {
         int activeJobs = metrics.getCurrentActiveJobs();
         float idealTime = metrics.getIdleTimePercentage();
 
+        //groupAWorkers.get().ignite().cache("MyCache").put();
         //Condition that triggers the sending a request for new node to be donated.
         //Message sent to all sub-clusters' masters.
         //TOPIC="Resource Requried"

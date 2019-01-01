@@ -124,7 +124,6 @@ public class ClusterGroupB {
                     System.out.println("The id are: "+col.consistentId());
 
                 }
-
             }
 
 
@@ -133,16 +132,20 @@ public class ClusterGroupB {
             return true; // Return true to continue listening.
         });
 
+        ResourceRequest resourceRequest = new ResourceRequest(groupMastersMessage, metrics);
+        Thread t = new Thread(resourceRequest);
+        //t.start();
 
-        UUID myID = clusterGroupB.forClients().node().id();
-        System.out.println("My node id is: "+myID);
 
-        //Send request.
-        String myStatus = "Heap memory in my cluster is getting low.";
-        //if (activeJobs < 100) {
-
-            groupMastersMessage.send(REQUEST_TOPIC, myStatus);
-            System.out.println("Sent Request!");
+//        UUID myID = clusterGroupB.forClients().node().id();
+//        System.out.println("My node id is: "+myID);
+//
+//        //Send request.
+//        String myStatus = "Heap memory in my cluster is getting low.";
+//        //if (activeJobs < 100) {
+//
+//            groupMastersMessage.send(REQUEST_TOPIC, myStatus);
+//            System.out.println("Sent Request!");
        // }
 
 /*

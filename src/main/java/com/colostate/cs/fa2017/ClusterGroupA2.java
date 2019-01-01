@@ -31,10 +31,10 @@ public class ClusterGroupA2 {
         // Start Ignite node.
         Ignite ignite = Ignition.start(cfg);
 
-        try (IgniteCache<Object, String> cache = ignite.getOrCreateCache(cacheName)) {
-
-            //
-        }
+//        try (IgniteCache<Object, String> cache = ignite.getOrCreateCache(cacheName)) {
+//
+//            //
+//        }
 
 
     }
