@@ -7,6 +7,7 @@ import org.apache.ignite.cache.CacheMetrics;
 import org.apache.ignite.cache.CacheMode;
 import org.apache.ignite.cache.CachePeekMode;
 import org.apache.ignite.cache.affinity.Affinity;
+import org.apache.ignite.cache.affinity.AffinityFunction;
 import org.apache.ignite.cache.affinity.AffinityKey;
 import org.apache.ignite.cache.affinity.AffinityKeyMapped;
 import org.apache.ignite.cache.eviction.EvictableEntry;
@@ -16,7 +17,9 @@ import org.apache.ignite.cluster.ClusterGroup;
 import org.apache.ignite.cluster.ClusterMetrics;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
+import org.apache.ignite.configuration.DataStorageConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
+import org.apache.ignite.internal.processors.cache.GridCacheDefaultAffinityKeyMapper;
 import org.apache.ignite.internal.processors.cache.persistence.evict.Random2LruPageEvictionTracker;
 import org.apache.ignite.lang.IgniteRunnable;
 import org.jetbrains.annotations.Nullable;
@@ -28,11 +31,16 @@ import java.util.*;
 
 public class GeoHashAsKey {
 
+    private static final String cacheName = "MyCache";
+
+
 
     public static void main(String[] args) {
 
 
-        String cacheName = "MyCache";
+
+
+
 
         CacheConfiguration cacheCfg = new CacheConfiguration("MyCache");
         cacheCfg.setCacheMode(CacheMode.PARTITIONED);
@@ -48,54 +56,59 @@ public class GeoHashAsKey {
         //CacheConfiguration<GeoEntry, String>  cacheCfg1 = new CacheConfiguration(cacheName);
         //cacheCfg1.setEvictionPolicy(new BibekEvictionPolicy());
 
+        // Changing total RAM size to be used by Ignite Node.
+        DataStorageConfiguration storageCfg = new DataStorageConfiguration();
 
+        // Setting the size of the default memory region to 40MB to achieve this.
+        storageCfg.getDefaultDataRegionConfiguration().setMaxSize(
+                50L * 1024* 1024 );
 
-
+        cfg.setDataStorageConfiguration(storageCfg);
 
         // Start Ignite node.
         Ignite ignite = Ignition.start(cfg);
         //Ignite ignite = Ignition.start("/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-fabric-2.5.0-bin/examples/config/example-data-regions.xml");
 
-        ClusterGroup cluster = ignite.cluster();
-
-        ClusterGroup clusterGroupA = cluster.forAttribute("group", "A");
-        ClusterGroup clusterGroupB = cluster.forAttribute("group", "B");
-        ClusterGroup clusterGroupC = cluster.forAttribute("group", "C");
-
-        ClusterNode groupAMaster = clusterGroupA.forAttribute("role", "master").node();
-        ClusterGroup groupAWorkers = clusterGroupB.forAttribute("role", "worker");
-        ClusterNode groupBMaster = clusterGroupA.forAttribute("role", "master").node();
-        ClusterGroup groupBWorkers = clusterGroupB.forAttribute("role", "worker");
-
-        ClusterGroup groupOfMasters = cluster.forAttribute("role", "master");
-
-        System.out.println("The number of masters: "+groupOfMasters.nodes().size());
-
-
-
-
-        Collection<ClusterNode> workers = clusterGroupA.nodes();
-        System.out.println("The Number of nodes in Group A is: "+workers.size());
-
-//        UUID masterAID = groupAMaster.id();
-//        UUID masterBID = groupBMaster.id();
-//        UUID masterCID = groupBMaster.id();
-
-
-
-        IgniteMessaging groupMastersMessage = ignite.message(cluster.forClients());
-
-
-
-        IgniteMessaging messagingGroupA = ignite.message(clusterGroupA);
-        IgniteMessaging messagingGroupB = ignite.message(clusterGroupB);
-
-
+//        ClusterGroup cluster = ignite.cluster();
+//
+//        ClusterGroup clusterGroupA = cluster.forAttribute("group", "A");
+//        ClusterGroup clusterGroupB = cluster.forAttribute("group", "B");
+//        ClusterGroup clusterGroupC = cluster.forAttribute("group", "C");
+//
+//        ClusterNode groupAMaster = clusterGroupA.forAttribute("role", "master").node();
+//        ClusterGroup groupAWorkers = clusterGroupB.forAttribute("role", "worker");
+//        ClusterNode groupBMaster = clusterGroupA.forAttribute("role", "master").node();
+//        ClusterGroup groupBWorkers = clusterGroupB.forAttribute("role", "worker");
+//
+//        ClusterGroup groupOfMasters = cluster.forAttribute("role", "master");
+//
+//        System.out.println("The number of masters: "+groupOfMasters.nodes().size());
+//
+//
+//
+//
+//        Collection<ClusterNode> workers = clusterGroupA.nodes();
+//        System.out.println("The Number of nodes in Group A is: "+workers.size());
+//
+////        UUID masterAID = groupAMaster.id();
+////        UUID masterBID = groupBMaster.id();
+////        UUID masterCID = groupBMaster.id();
+//
+//
+//
+//        IgniteMessaging groupMastersMessage = ignite.message(cluster.forClients());
+//
+//
+//
+//        IgniteMessaging messagingGroupA = ignite.message(clusterGroupA);
+//        IgniteMessaging messagingGroupB = ignite.message(clusterGroupB);
 
 
 
 
-        try (IgniteCache<Object, String> cache = groupOfMasters.ignite().getOrCreateCache(cacheName)) {
+
+
+        try (IgniteCache<Object, String> cache = ignite.getOrCreateCache(cacheName)) {
 //                // Clear caches before running example.
                 cache.clear();
 //                Affinity<Object> affinity = ignite.affinity(cacheName);
@@ -105,11 +118,16 @@ public class GeoHashAsKey {
 //                PrintWriter writer1 = new PrintWriter("/s/chopin/b/grad/bbkstha/Desktop/GeospatialSample/observation/KeyToPartitionMap_RAffninty.txt", "UTF-8");
 //                HashMap<Integer, ArrayList<GeoEntry>> partIdtoKey = new HashMap();
 //
-                FileInputStream fstream = new FileInputStream("/s/chopin/b/grad/bbkstha/Desktop/GeospatialSample/1.csv"); //us/or/portland_metro.csv");
+                FileInputStream fstream = new FileInputStream("/s/chopin/b/grad/bbkstha/Desktop/GeospatialSample/ds9.entity.csv"); //us/or/portland_metro.csv");
                 BufferedReader br = new BufferedReader(new InputStreamReader(fstream));
                 String strLine;
                 Integer counter = 0;
-                int duplicate = 0;
+                Collection<String> keys = new ArrayList<>(12447);
+
+                Affinity<Object> affinity = ignite.affinity(cacheName);
+
+
+            int duplicate = 0;
                 //Read File Line By Line
                 while ((strLine = br.readLine()) != null){
                     // Print the content on the console
@@ -119,16 +137,26 @@ public class GeoHashAsKey {
 
 
 
-                        String lon = strLine.split(",")[0];
-                        String lat = strLine.split(",")[1];
-                        GeoEntry geoEntry =  new GeoEntry(lon, lat, 6);
+                        String lat = strLine.split(",")[0];
+                        String lon = strLine.split(",")[1];
+                        GeoEntry geoEntry =  new GeoEntry(lon, lat, 2);
+
+                        System.out.println("Geohash values: "+geoEntry.getGeoHash());
+
+                        GridCacheDefaultAffinityKeyMapper cacheAffinityKeyMapper = new GridCacheDefaultAffinityKeyMapper();
+                        Object affKey = cacheAffinityKeyMapper.affinityKey(geoEntry);
+                        System.out.println("The corresponding aff key is: "+affKey);
+
+
+
+
+
                         //String geohashString = GeoHash.withCharacterPrecision(Double.parseDouble(lat), -Double.parseDouble(lon), 12).toBase32();
                         //System.out.println(strLine);
                        // System.out.println(geohashString);
                         //String affkey = geohashString.substring(0,6);
 
                         //Object newKey = new AffinityKey<>(geohashString,affkey);
-                        GeoEntry newKey = geoEntry;
 
                         //geoHashArray.add(newKey);
 
@@ -138,8 +166,14 @@ public class GeoHashAsKey {
 //                           duplicate++;
 //                        }
 
-                        cache.put(newKey, strLine);
 
+
+                        //keys.add(newKey.geoHash);
+
+                        cache.put(geoEntry, strLine);
+
+                        System.out.println("The corresponding partition ID for key is: "+affinity.partition(geoEntry));
+                        System.out.println("The node is: "+affinity.mapPartitionToNode(affinity.partition(geoEntry)).id());
 
 //                        String aKey =  affinity.affinityKey(newKey).toString();
 //
@@ -171,11 +205,13 @@ public class GeoHashAsKey {
                          //System.out.println(counter+". The value of key:"+key+" is: "+value);
                     }
                 }
+                System.out.println("Counter: "+counter);
+                //visitUsingMapKeysToNodes(counter, keys);
 
-                ClusterMetrics gA = clusterGroupA.metrics();
-                ClusterMetrics gB = clusterGroupB.metrics();
-            System.out.println("Heap memory used in A: "+gA.getHeapMemoryUsed());
-            System.out.println("Heap memory used in B: "+gB.getHeapMemoryUsed());
+//                ClusterMetrics gA = clusterGroupA.metrics();
+//                ClusterMetrics gB = clusterGroupB.metrics();
+//            System.out.println("Heap memory used in A: "+gA.getHeapMemoryUsed());
+//            System.out.println("Heap memory used in B: "+gB.getHeapMemoryUsed());
 
 //                System.out.println("The size of hashmap is: "+partIdtoKey.size());
 //                System.out.println("The counter is: "+counter);
@@ -344,6 +380,8 @@ public class GeoHashAsKey {
 //
 //
 //               // ignite.close();
+
+           // cache.destroy();
 //
             } catch (FileNotFoundException e) {
                 e.printStackTrace();
@@ -352,6 +390,37 @@ public class GeoHashAsKey {
         }
 
 
+    }
+
+    private static void visitUsingMapKeysToNodes(int KEY_CNT, Collection<String> keys) {
+        final Ignite ignite = Ignition.ignite();
+
+
+
+
+        // Map all keys to nodes.
+        Map<ClusterNode, Collection<String>> mappings = ignite.<String>affinity(cacheName).mapKeysToNodes(keys);
+
+        for (Map.Entry<ClusterNode, Collection<String>> mapping : mappings.entrySet()) {
+            ClusterNode node = mapping.getKey();
+
+            System.out.println("The cluster node id is: "+node.id());
+
+
+            final Collection<String> mappedKeys = mapping.getValue();
+
+            if (node != null) {
+                // Bring computations to the nodes where the data resides (i.e. collocation).
+                ignite.compute(ignite.cluster().forNode(node)).run(() -> {
+                    IgniteCache<Integer, String> cache = ignite.cache(cacheName);
+
+                    // Peek is a local memory lookup, however, value should never be 'null'
+                    // as we are co-located with node that has a given key.
+                    for (String key : mappedKeys)
+                        System.out.println("Co-located using mapKeysToNodes [key= " + key);
+                });
+            }
+        }
     }
 
 
