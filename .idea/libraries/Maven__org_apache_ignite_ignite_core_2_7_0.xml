@@ -8,6 +8,7 @@
     </JAVADOC>
     <SOURCES>
       <root url="jar://$MAVEN_REPOSITORY$/org/apache/ignite/ignite-core/2.7.0/ignite-core-2.7.0-sources.jar!/" />
+      <root url="file://$PROJECT_DIR$/../ignite/modules/core/src/main/java" />
     </SOURCES>
   </library>
 </component>

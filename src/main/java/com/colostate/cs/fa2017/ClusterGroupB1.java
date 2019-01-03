@@ -5,6 +5,8 @@ import org.apache.ignite.IgniteCache;
 import org.apache.ignite.Ignition;
 import org.apache.ignite.cache.CacheMode;
 import org.apache.ignite.configuration.CacheConfiguration;
+import org.apache.ignite.configuration.DataRegionConfiguration;
+import org.apache.ignite.configuration.DataStorageConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
 
 import java.util.HashMap;
@@ -26,6 +28,29 @@ public class ClusterGroupB1 {
         cfg.setCacheConfiguration(cacheCfg);
         cfg.setUserAttributes(userAtt);
 
+
+        // Changing total RAM size to be used by Ignite Node.
+        DataStorageConfiguration storageCfg = new DataStorageConfiguration();
+        DataRegionConfiguration regionCfg = new DataRegionConfiguration();
+
+        // Region name.
+        regionCfg.setName("40MB_Region");
+
+        // Setting the size of the default memory region to 50MB to achieve this.
+        regionCfg.setInitialSize(
+                10L * 1024 * 1024);
+        regionCfg.setMaxSize( 150L * 1024 * 1024);
+
+
+        // Enable persistence for the region.
+        regionCfg.setPersistenceEnabled(false);
+
+        // Setting the data region configuration.
+        storageCfg.setDataRegionConfigurations(regionCfg);
+
+
+        // Applying the new configuration.
+        cfg.setDataStorageConfiguration(storageCfg);
         //CacheConfiguration<GeoHashAsKey.GeoEntry, String>  cacheCfg1 = new CacheConfiguration(cacheName);
 
         // Start Ignite node.

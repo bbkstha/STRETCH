@@ -1,5 +1,6 @@
 package com.colostate.cs.fa2017;
 
+import com.colostate.cs.fa2017.affinity.StretchAffinityFunction;
 import org.apache.ignite.*;
 import ch.hsr.geohash.GeoHash;
 import org.apache.ignite.cache.CacheEntry;
@@ -67,7 +68,6 @@ public class GeoHashAsKey {
 
         // Start Ignite node.
         Ignite ignite = Ignition.start(cfg);
-        //Ignite ignite = Ignition.start("/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-fabric-2.5.0-bin/examples/config/example-data-regions.xml");
 
 //        ClusterGroup cluster = ignite.cluster();
 //
@@ -103,11 +103,13 @@ public class GeoHashAsKey {
 //        IgniteMessaging messagingGroupA = ignite.message(clusterGroupA);
 //        IgniteMessaging messagingGroupB = ignite.message(clusterGroupB);
 
+        //Store info about all the worker nodes in each sub-cluster
+        //<A, List(worker1, worker2, ...)>
+        //<B, List(worker1, worker2, ...)>
+        Map<String, List<UUID>> subClusterInfo = new HashMap<>();
 
-
-
-
-
+        CacheConfiguration tmpCfg = new CacheConfiguration();
+        ignite.addCacheConfiguration(tmpCfg.setAffinity(new StretchAffinityFunction(1024, subClusterInfo)));
         try (IgniteCache<Object, String> cache = ignite.getOrCreateCache(cacheName)) {
 //                // Clear caches before running example.
                 cache.clear();
@@ -173,7 +175,8 @@ public class GeoHashAsKey {
                         cache.put(geoEntry, strLine);
 
                         System.out.println("The corresponding partition ID for key is: "+affinity.partition(geoEntry));
-                        System.out.println("The node is: "+affinity.mapPartitionToNode(affinity.partition(geoEntry)).id());
+                        System.out.println("The primary node is: "+affinity.mapPartitionToNode(affinity.partition(geoEntry)).id());
+                        System.out.println("The size of collectio is: "+affinity.mapPartitionToPrimaryAndBackups(affinity.partition(geoEntry)).size());
 
 //                        String aKey =  affinity.affinityKey(newKey).toString();
 //
