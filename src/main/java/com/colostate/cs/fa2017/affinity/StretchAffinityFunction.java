@@ -19,10 +19,13 @@ import java.util.*;
 public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
 
-    private Map<String, List<UUID>> subClusterInfo;
+    private static final char[] base32 = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'b', 'c', 'd', 'e', 'f',
+            'g', 'h', 'j', 'k', 'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z' };
+
+    private Map<String, Collection<ClusterNode>> subClusterInfo;
 
     /** Number of partitions. */
-    private int parts;
+    private int parts = 32;
 
     /** Mask to use in calculation when partitions count is power of 2. */
     private int mask = -1;
@@ -34,11 +37,11 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 //
 //    }
 
-    public StretchAffinityFunction(int parts, Map<String, List<UUID>> subClusterInfo) {
+    public StretchAffinityFunction(int parts) {
 
         A.ensure(parts > 0, "parts > 0");
         setPartitions(parts);
-        this.subClusterInfo = subClusterInfo;
+        //this.subClusterInfo = subClusterInfo;
     }
 
 
@@ -69,13 +72,24 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
             throw new IllegalArgumentException("Null key is passed for a partition calculation. " +
                     "Make sure that an affinity key that is used is initialized properly.");
 
-        if (mask >= 0) {
+        /*if (mask >= 0) {
             int h;
 
             return ((h = key.hashCode()) ^ (h >>> 16)) & mask;
         }
 
-        return U.safeAbs(key.hashCode() % parts);
+        return U.safeAbs(key.hashCode() % parts);*/
+        char k = key.toString().charAt(0);
+        int part = 0;
+
+        for (int i=0; i< base32.length; i++) {
+            if (k == base32[i]) {
+                part = i;
+                break;
+            }
+        }
+
+        return part;
     }
 
     /** {@inheritDoc} */
@@ -100,7 +114,18 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
         List<ClusterNode> nodes = affCtx.currentTopologySnapshot();
 
-        nodes.iterator().next();
+        Collection<ClusterNode> workerA = new ArrayList<ClusterNode>() {{
+                    add(nodes.get(0));
+                    add(nodes.get(1));
+                }};
+
+        Collection<ClusterNode> workerB = new ArrayList<ClusterNode>() {{
+            add(nodes.get(2));
+            add(nodes.get(3));
+        }};
+
+        subClusterInfo.put("A", workerA);
+        subClusterInfo.put("B", workerB);
 
 
 
@@ -125,7 +150,6 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
      * @param part Partition.
      * @param nodes Nodes.
      * @param backups Number of backups.
-     * @param neighborhoodCache Neighborhood.
      * @return Assignment.
      */
     public List<ClusterNode> assignPartition(int part,
@@ -134,7 +158,41 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
         if (nodes.size() <= 1)
             return nodes;
 
-        IgniteBiTuple<Long, ClusterNode>[] hashArr =
+        final int primaryAndBackups = backups == Integer.MAX_VALUE ? nodes.size() : Math.min(backups + 1, nodes.size());
+        List<ClusterNode> res = new ArrayList<>(primaryAndBackups);
+
+        int partsPerNode = parts/nodes.size();
+
+        char[] groupName = {'A', 'B', 'C', 'D'};
+
+        for(int i = 0; i< subClusterInfo.size(); i++){
+
+            Collection<ClusterNode> nodesPerGroup = subClusterInfo.get(groupName[i]);
+            Iterator<ClusterNode> it = nodesPerGroup.iterator();
+            int partsPerGroup = partsPerNode * nodesPerGroup.size();
+            for(int j=0; j< nodesPerGroup.size(); j++){
+
+                int min = j * partsPerNode;
+                int max = (j+1) * partsPerNode;
+                if(part>=min && part < max){
+                    while(it.hasNext()){
+
+                        res.add(it.next());
+                        break;
+                    }
+
+                }
+            }
+        }
+
+        return res;
+
+
+
+
+
+
+/*        IgniteBiTuple<Long, ClusterNode>[] hashArr =
                 (IgniteBiTuple<Long, ClusterNode> [])new IgniteBiTuple[nodes.size()];
 
         for (int i = 0; i < nodes.size(); i++) {
@@ -147,17 +205,16 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
             hashArr[i] = F.t(hash, node);
         }
 
-        final int primaryAndBackups = backups == Integer.MAX_VALUE ? nodes.size() : Math.min(backups + 1, nodes.size());
+
 
         Iterable<ClusterNode> sortedNodes = new LazyLinearSortedContainer(hashArr, primaryAndBackups);
 
-       /* // REPLICATED cache case
+        // REPLICATED cache case
         if (backups == Integer.MAX_VALUE)
-            return replicatedAssign(nodes, sortedNodes);*/
+            return replicatedAssign(nodes, sortedNodes);
 
         Iterator<ClusterNode> it = sortedNodes.iterator();
 
-        List<ClusterNode> res = new ArrayList<>(primaryAndBackups);
 
         Collection<ClusterNode> allNeighbors = new HashSet<>();
 
@@ -165,10 +222,10 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
         res.add(primary);
 
-        /*if (exclNeighbors)
-            allNeighbors.addAll(neighborhoodCache.get(primary.id()));*/
+        if (exclNeighbors)
+            allNeighbors.addAll(neighborhoodCache.get(primary.id()));
 
-       /* // Select backups.
+        // Select backups.
         if (backups > 0) {
             while (it.hasNext() && res.size() < primaryAndBackups) {
                 ClusterNode node = it.next();
@@ -189,9 +246,9 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
                         allNeighbors.addAll(neighborhoodCache.get(node.id()));
                 }
             }
-        }*/
+        }
 
-        /*if (res.size() < primaryAndBackups && nodes.size() >= primaryAndBackups && exclNeighbors) {
+        if (res.size() < primaryAndBackups && nodes.size() >= primaryAndBackups && exclNeighbors) {
             // Need to iterate again in case if there are no nodes which pass exclude neighbors backups criteria.
             it = sortedNodes.iterator();
 
@@ -212,11 +269,11 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
                 exclNeighborsWarn = true;
             }
-        }*/
+        }
 
         assert res.size() <= primaryAndBackups;
 
-        return res;
+        return res;*/
     }
 
     /**
