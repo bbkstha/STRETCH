@@ -3,11 +3,16 @@ package com.colostate.cs.fa2017;
 import com.colostate.cs.fa2017.affinity.StretchAffinityFunction;
 import org.apache.ignite.*;
 import ch.hsr.geohash.GeoHash;
+import org.apache.ignite.cache.CacheMetrics;
 import org.apache.ignite.cache.CacheMode;
+import org.apache.ignite.cache.CacheRebalanceMode;
 import org.apache.ignite.cache.affinity.Affinity;
 import org.apache.ignite.cache.affinity.AffinityKeyMapped;
+import org.apache.ignite.cluster.ClusterGroup;
+import org.apache.ignite.cluster.ClusterMetrics;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
+import org.apache.ignite.configuration.DataRegionConfiguration;
 import org.apache.ignite.configuration.DataStorageConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
 import org.apache.ignite.internal.processors.cache.GridCacheDefaultAffinityKeyMapper;
@@ -23,11 +28,16 @@ public class GeoHashAsKey {
     public static void main(String[] args) {
 
         System.setProperty("-DIGNITE_SKIP_CONFIGURATION_CONSISTENCY_CHECK", "true");
+        //System.setProperty("-DIGNITE_REST_START_ON_CLIENT", "true");
 
         CacheConfiguration cacheCfg = new CacheConfiguration("MyCache");
         cacheCfg.setCacheMode(CacheMode.PARTITIONED);
         cacheCfg.setOnheapCacheEnabled(false);
         cacheCfg.setAffinity(new StretchAffinityFunction(64));
+        cacheCfg.setRebalanceMode(CacheRebalanceMode.NONE);
+
+        // Enabling the metrics for the cache.
+        //cacheCfg.setStatisticsEnabled(true);
 
         IgniteConfiguration cfg = new IgniteConfiguration();
         cfg.setCacheConfiguration(cacheCfg);
@@ -35,20 +45,56 @@ public class GeoHashAsKey {
 
         // Changing total RAM size to be used by Ignite Node.
         DataStorageConfiguration storageCfg = new DataStorageConfiguration();
+        DataRegionConfiguration regionCfg = new DataRegionConfiguration();
 
-        // Setting the size of the default memory region to 40MB to achieve this.
-        storageCfg.getDefaultDataRegionConfiguration().setMaxSize(
-                50L * 1024 * 1024);
+        // Region name.
+        regionCfg.setName("80MB_Region");
+
+        // Enabe metrics for this region.
+        //regionCfg.setMetricsEnabled(true);
+
+        // Setting the size of the default memory region to 80MB to achieve this.
+        regionCfg.setInitialSize(
+                10L * 1024 * 1024);
+        regionCfg.setMaxSize( 2000L * 1024 * 1024);
+
+
+
+
+        // Enable persistence for the region.
+        regionCfg.setPersistenceEnabled(false);
+
+        storageCfg.setDefaultDataRegionConfiguration(regionCfg);
+        //storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
 
         cfg.setDataStorageConfiguration(storageCfg);
+
 
         // Start Ignite node.
         Ignite ignite = Ignition.start(cfg);
 
+        ClusterGroup workerGroup = ignite.cluster().forAttribute("role", "worker");
+        System.out.println("The workers are: "+workerGroup.nodes().size());
+        ClusterMetrics clusterMetrics = workerGroup.metrics();
+
+        Collection<ClusterNode> nodes =  workerGroup.nodes();
+        Iterator<ClusterNode> iterator = nodes.iterator();
+        ClusterNode node1 = iterator.next();
+        //ClusterNode node2 = iterator.next();
+        ClusterMetrics node1Metrics = node1.metrics();
+        //ClusterMetrics node2Metrics = node2.metrics();
+
+
         try (IgniteCache<Object, String> cache = ignite.getOrCreateCache(cacheName)) {
-//                // Clear caches before running example.
+            // Clear caches before running example.
             cache.clear();
             String strLine;
+
+
+            // Get cache metrics
+            CacheMetrics cacheMetrics = cache.metrics();
+
+
 
             Integer counter = 0;
             Collection<String> keys = new ArrayList<>(12447);
@@ -78,18 +124,51 @@ public class GeoHashAsKey {
                         GridCacheDefaultAffinityKeyMapper cacheAffinityKeyMapper = new GridCacheDefaultAffinityKeyMapper();
                         Object affKey = cacheAffinityKeyMapper.affinityKey(geoEntry);
                         System.out.println("The corresponding aff key is: " + affKey);
-                        cache.put(geoEntry, strLine);
+                        cache.put(geoEntry, "");
 
-                        System.out.println("The corresponding partition ID for key is: " + affinity.partition(geoEntry));
+                        System.out.println("NonHeap used in cluster: "+clusterMetrics.getNonHeapMemoryUsed());
+                        System.out.println("Heap used in cluster: "+clusterMetrics.getHeapMemoryUsed());
+                        System.out.println("Avg cpu load in cluster: "+clusterMetrics.getAverageCpuLoad());
+
+
+                        System.out.println("NonHeap used in node1: "+node1Metrics.getNonHeapMemoryUsed());
+                        System.out.println("Heap used in node1: "+node1Metrics.getHeapMemoryUsed());
+                        System.out.println("Avg cpu load in node1: "+node1Metrics.getAverageCpuLoad());
+
+                        System.out.println("Off heap allocated: "+cacheMetrics.getOffHeapAllocatedSize());
+                        System.out.println("Off heap entries count: "+cacheMetrics.getOffHeapEntriesCount());
+                        System.out.println("Off heap allocated: "+cacheMetrics.getRebalancingPartitionsCount());
+                        System.out.println("Off heap allocated: "+cacheMetrics.getCacheEvictions());
+                        System.out.println("Heap entries count: "+cacheMetrics.getHeapEntriesCount());
+                        System.out.println("Off heap eviction: "+cacheMetrics.getOffHeapEvictions());
+
+
+
+
+
+//                        System.out.println("NonHeap used in node2: "+node2Metrics.getNonHeapMemoryUsed());
+//                        System.out.println("Heap used in node2: "+node2Metrics.getHeapMemoryUsed());
+//                        System.out.println("Avg cpu load in node2: "+node2Metrics.getAverageCpuLoad());
+
+
+
+//                        System.out.println("The corresponding partition ID for key is: " + affinity.partition(geoEntry));
                         System.out.println("The primary node is: " + affinity.mapPartitionToNode(affinity.partition(geoEntry)).id());
-                        System.out.println("The size of collectio is: " + affinity.mapPartitionToPrimaryAndBackups(affinity.partition(geoEntry)).size());
+//                        System.out.println("The size of collectio is: " + affinity.mapPartitionToPrimaryAndBackups(affinity.partition(geoEntry)).size());
                         counter++;
                     }
                 }
             }
 
+            System.out.println("Off heap allocated: "+cacheMetrics.getOffHeapAllocatedSize());
+            System.out.println("Off heap entries count: "+cacheMetrics.getOffHeapEntriesCount());
+            System.out.println("Off heap allocated: "+cacheMetrics.getRebalancingPartitionsCount());
+            System.out.println("Off heap allocated: "+cacheMetrics.getCacheEvictions());
+            System.out.println("Heap entries count: "+cacheMetrics.getHeapEntriesCount());
+            System.out.println("Off heap eviction: "+cacheMetrics.getOffHeapEvictions());
+
             System.out.println("Counter: " + counter);
-            cache.destroy();
+            //cache.destroy();
 
         } catch (FileNotFoundException e) {
             e.printStackTrace();
