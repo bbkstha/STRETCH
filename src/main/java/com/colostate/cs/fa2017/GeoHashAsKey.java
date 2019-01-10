@@ -124,7 +124,11 @@ public class GeoHashAsKey {
                         GridCacheDefaultAffinityKeyMapper cacheAffinityKeyMapper = new GridCacheDefaultAffinityKeyMapper();
                         Object affKey = cacheAffinityKeyMapper.affinityKey(geoEntry);
                         System.out.println("The corresponding aff key is: " + affKey);
+
+
                         cache.put(geoEntry, "");
+
+
 
                         System.out.println("NonHeap used in cluster: "+clusterMetrics.getNonHeapMemoryUsed());
                         System.out.println("Heap used in cluster: "+clusterMetrics.getHeapMemoryUsed());
