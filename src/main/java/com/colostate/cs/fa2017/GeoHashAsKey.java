@@ -34,14 +34,15 @@ public class GeoHashAsKey {
         cacheCfg.setCacheMode(CacheMode.PARTITIONED);
         cacheCfg.setOnheapCacheEnabled(false);
         cacheCfg.setAffinity(new StretchAffinityFunction(64));
-        cacheCfg.setRebalanceMode(CacheRebalanceMode.NONE);
+        //cacheCfg.setRebalanceMode(CacheRebalanceMode.NONE);
+        //cacheCfg.setEvictionPolicyFactory();
 
         // Enabling the metrics for the cache.
         //cacheCfg.setStatisticsEnabled(true);
 
         IgniteConfiguration cfg = new IgniteConfiguration();
         cfg.setCacheConfiguration(cacheCfg);
-        cfg.setClientMode(true);
+        //cfg.setClientMode(true);
 
         // Changing total RAM size to be used by Ignite Node.
         DataStorageConfiguration storageCfg = new DataStorageConfiguration();
@@ -119,11 +120,11 @@ public class GeoHashAsKey {
                         String lon = strLine.split(",")[1];
                         GeoEntry geoEntry = new GeoEntry(lat, lon, 2);
 
-                        System.out.println("Geohash values: " + geoEntry.getGeoHash());
+                        //System.out.println("Geohash values: " + geoEntry.getGeoHash());
 
                         GridCacheDefaultAffinityKeyMapper cacheAffinityKeyMapper = new GridCacheDefaultAffinityKeyMapper();
                         Object affKey = cacheAffinityKeyMapper.affinityKey(geoEntry);
-                        System.out.println("The corresponding aff key is: " + affKey);
+                        //System.out.println("The corresponding aff key is: " + affKey);
 
 
                         cache.put(geoEntry, "");
@@ -133,18 +134,18 @@ public class GeoHashAsKey {
                         System.out.println("NonHeap used in cluster: "+clusterMetrics.getNonHeapMemoryUsed());
                         System.out.println("Heap used in cluster: "+clusterMetrics.getHeapMemoryUsed());
                         System.out.println("Avg cpu load in cluster: "+clusterMetrics.getAverageCpuLoad());
-
-
-                        System.out.println("NonHeap used in node1: "+node1Metrics.getNonHeapMemoryUsed());
-                        System.out.println("Heap used in node1: "+node1Metrics.getHeapMemoryUsed());
-                        System.out.println("Avg cpu load in node1: "+node1Metrics.getAverageCpuLoad());
-
-                        System.out.println("Off heap allocated: "+cacheMetrics.getOffHeapAllocatedSize());
-                        System.out.println("Off heap entries count: "+cacheMetrics.getOffHeapEntriesCount());
-                        System.out.println("Off heap allocated: "+cacheMetrics.getRebalancingPartitionsCount());
-                        System.out.println("Off heap allocated: "+cacheMetrics.getCacheEvictions());
-                        System.out.println("Heap entries count: "+cacheMetrics.getHeapEntriesCount());
-                        System.out.println("Off heap eviction: "+cacheMetrics.getOffHeapEvictions());
+//
+//
+//                        System.out.println("NonHeap used in node1: "+node1Metrics.getNonHeapMemoryUsed());
+//                        System.out.println("Heap used in node1: "+node1Metrics.getHeapMemoryUsed());
+//                        System.out.println("Avg cpu load in node1: "+node1Metrics.getAverageCpuLoad());
+//
+//                        System.out.println("Off heap allocated: "+cacheMetrics.getOffHeapAllocatedSize());
+//                        System.out.println("Off heap entries count: "+cacheMetrics.getOffHeapEntriesCount());
+//                        System.out.println("Off heap allocated: "+cacheMetrics.getRebalancingPartitionsCount());
+//                        System.out.println("Off heap allocated: "+cacheMetrics.getCacheEvictions());
+//                        System.out.println("Heap entries count: "+cacheMetrics.getHeapEntriesCount());
+//                        System.out.println("Off heap eviction: "+cacheMetrics.getOffHeapEvictions());
 
 
 
@@ -157,22 +158,22 @@ public class GeoHashAsKey {
 
 
 //                        System.out.println("The corresponding partition ID for key is: " + affinity.partition(geoEntry));
-                        System.out.println("The primary node is: " + affinity.mapPartitionToNode(affinity.partition(geoEntry)).id());
+                        //System.out.println("The primary node is: " + affinity.mapPartitionToNode(affinity.partition(geoEntry)).id());
 //                        System.out.println("The size of collectio is: " + affinity.mapPartitionToPrimaryAndBackups(affinity.partition(geoEntry)).size());
                         counter++;
                     }
                 }
             }
-
-            System.out.println("Off heap allocated: "+cacheMetrics.getOffHeapAllocatedSize());
-            System.out.println("Off heap entries count: "+cacheMetrics.getOffHeapEntriesCount());
-            System.out.println("Off heap allocated: "+cacheMetrics.getRebalancingPartitionsCount());
-            System.out.println("Off heap allocated: "+cacheMetrics.getCacheEvictions());
-            System.out.println("Heap entries count: "+cacheMetrics.getHeapEntriesCount());
-            System.out.println("Off heap eviction: "+cacheMetrics.getOffHeapEvictions());
+//
+//            System.out.println("Off heap allocated: "+cacheMetrics.getOffHeapAllocatedSize());
+//            System.out.println("Off heap entries count: "+cacheMetrics.getOffHeapEntriesCount());
+//            System.out.println("Off heap allocated: "+cacheMetrics.getRebalancingPartitionsCount());
+//            System.out.println("Off heap allocated: "+cacheMetrics.getCacheEvictions());
+//            System.out.println("Heap entries count: "+cacheMetrics.getHeapEntriesCount());
+//            System.out.println("Off heap eviction: "+cacheMetrics.getOffHeapEvictions());
 
             System.out.println("Counter: " + counter);
-            //cache.destroy();
+            cache.destroy();
 
         } catch (FileNotFoundException e) {
             e.printStackTrace();
