@@ -7,6 +7,8 @@ import org.apache.ignite.cache.CacheMetrics;
 import org.apache.ignite.cache.CacheMode;
 import org.apache.ignite.cache.CacheRebalanceMode;
 import org.apache.ignite.cache.affinity.Affinity;
+import org.apache.ignite.cache.affinity.AffinityFunction;
+import org.apache.ignite.cache.affinity.AffinityFunctionContext;
 import org.apache.ignite.cache.affinity.AffinityKeyMapped;
 import org.apache.ignite.cluster.ClusterGroup;
 import org.apache.ignite.cluster.ClusterMetrics;
@@ -25,7 +27,7 @@ public class GeoHashAsKey {
 
     private static final String cacheName = "MyCache";
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
 
         System.setProperty("-DIGNITE_SKIP_CONFIGURATION_CONSISTENCY_CHECK", "true");
         //System.setProperty("-DIGNITE_REST_START_ON_CLIENT", "true");
@@ -33,8 +35,11 @@ public class GeoHashAsKey {
         CacheConfiguration cacheCfg = new CacheConfiguration("MyCache");
         cacheCfg.setCacheMode(CacheMode.PARTITIONED);
         cacheCfg.setOnheapCacheEnabled(false);
-        cacheCfg.setAffinity(new StretchAffinityFunction(64));
-        //cacheCfg.setRebalanceMode(CacheRebalanceMode.NONE);
+        cacheCfg.setAffinity(new StretchAffinityFunction(1024));
+
+
+        cacheCfg.setRebalanceMode(CacheRebalanceMode.NONE);
+
         //cacheCfg.setEvictionPolicyFactory();
 
         // Enabling the metrics for the cache.
@@ -43,6 +48,8 @@ public class GeoHashAsKey {
         IgniteConfiguration cfg = new IgniteConfiguration();
         cfg.setCacheConfiguration(cacheCfg);
         //cfg.setClientMode(true);
+
+
 
         // Changing total RAM size to be used by Ignite Node.
         DataStorageConfiguration storageCfg = new DataStorageConfiguration();
@@ -73,20 +80,20 @@ public class GeoHashAsKey {
 
         // Start Ignite node.
         Ignite ignite = Ignition.start(cfg);
+        //ignite.active(true);
+//        ClusterGroup workerGroup = ignite.cluster().forAttribute("role", "worker");
+//        System.out.println("The workers are: "+workerGroup.nodes().size());
+//        ClusterMetrics clusterMetrics = workerGroup.metrics();
+//
+//        Collection<ClusterNode> nodes =  workerGroup.nodes();
+//        Iterator<ClusterNode> iterator = nodes.iterator();
+//        ClusterNode node1 = iterator.next();
+//        //ClusterNode node2 = iterator.next();
+//        ClusterMetrics node1Metrics = node1.metrics();
+//        //ClusterMetrics node2Metrics = node2.metrics();
 
-        ClusterGroup workerGroup = ignite.cluster().forAttribute("role", "worker");
-        System.out.println("The workers are: "+workerGroup.nodes().size());
-        ClusterMetrics clusterMetrics = workerGroup.metrics();
 
-        Collection<ClusterNode> nodes =  workerGroup.nodes();
-        Iterator<ClusterNode> iterator = nodes.iterator();
-        ClusterNode node1 = iterator.next();
-        //ClusterNode node2 = iterator.next();
-        ClusterMetrics node1Metrics = node1.metrics();
-        //ClusterMetrics node2Metrics = node2.metrics();
-
-
-        try (IgniteCache<Object, String> cache = ignite.getOrCreateCache(cacheName)) {
+        IgniteCache<Integer, String> cache = ignite.getOrCreateCache(cacheName);
             // Clear caches before running example.
             cache.clear();
             String strLine;
@@ -102,6 +109,13 @@ public class GeoHashAsKey {
             int duplicate = 0;
 
             Affinity<Object> affinity = ignite.affinity(cacheName);
+
+
+
+
+
+
+
             File folder = new File("/s/chopin/b/grad/bbkstha/Desktop/GeospatialSample/naam/");
             File[] listOfFiles = folder.listFiles();
             BufferedReader bufferReader = null;
@@ -118,22 +132,22 @@ public class GeoHashAsKey {
 
                         String lat = strLine.split(",")[0];
                         String lon = strLine.split(",")[1];
-                        GeoEntry geoEntry = new GeoEntry(lat, lon, 2);
+                        //GeoEntry geoEntry = new GeoEntry(lat, lon, 8);
 
                         //System.out.println("Geohash values: " + geoEntry.getGeoHash());
 
                         GridCacheDefaultAffinityKeyMapper cacheAffinityKeyMapper = new GridCacheDefaultAffinityKeyMapper();
-                        Object affKey = cacheAffinityKeyMapper.affinityKey(geoEntry);
+                        //Object affKey = cacheAffinityKeyMapper.affinityKey(geoEntry);
                         //System.out.println("The corresponding aff key is: " + affKey);
 
 
-                        cache.put(geoEntry, "");
+                       // cache.put(geoEntry.getGeoHash(), strLine);
+                        cache.put(counter, strLine);
 
 
-
-                        System.out.println("NonHeap used in cluster: "+clusterMetrics.getNonHeapMemoryUsed());
-                        System.out.println("Heap used in cluster: "+clusterMetrics.getHeapMemoryUsed());
-                        System.out.println("Avg cpu load in cluster: "+clusterMetrics.getAverageCpuLoad());
+//                        System.out.println("NonHeap used in cluster: "+clusterMetrics.getNonHeapMemoryUsed());
+//                        System.out.println("Heap used in cluster: "+clusterMetrics.getHeapMemoryUsed());
+//                        System.out.println("Avg cpu load in cluster: "+clusterMetrics.getAverageCpuLoad());
 //
 //
 //                        System.out.println("NonHeap used in node1: "+node1Metrics.getNonHeapMemoryUsed());
@@ -158,13 +172,25 @@ public class GeoHashAsKey {
 
 
 //                        System.out.println("The corresponding partition ID for key is: " + affinity.partition(geoEntry));
-                        //System.out.println("The primary node is: " + affinity.mapPartitionToNode(affinity.partition(geoEntry)).id());
+//                        System.out.println("The primary node is: " + affinity.mapPartitionToNode(affinity.partition(geoEntry)).id());
 //                        System.out.println("The size of collectio is: " + affinity.mapPartitionToPrimaryAndBackups(affinity.partition(geoEntry)).size());
                         counter++;
                     }
                 }
             }
-//
+
+            System.out.println("The partition for key:5000 is: "+affinity.partition(5000));
+
+
+        AffinityFunction affinityFunction = ignite.configuration().getCacheConfiguration()[0].getAffinity();
+        AffinityFunctionContext affinityFunctionContext = affinityFunction.getAffinityFunctionContext();
+
+
+        affinityFunction.assignPartitions(affinityFunctionContext);
+
+
+        System.out.println("The partition for key:5000 is: "+affinity.partition(5000));
+            //
 //            System.out.println("Off heap allocated: "+cacheMetrics.getOffHeapAllocatedSize());
 //            System.out.println("Off heap entries count: "+cacheMetrics.getOffHeapEntriesCount());
 //            System.out.println("Off heap allocated: "+cacheMetrics.getRebalancingPartitionsCount());
@@ -173,13 +199,9 @@ public class GeoHashAsKey {
 //            System.out.println("Off heap eviction: "+cacheMetrics.getOffHeapEvictions());
 
             System.out.println("Counter: " + counter);
-            cache.destroy();
+            //cache.destroy();
 
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+
     }
 
     private static void visitUsingMapKeysToNodes(int KEY_CNT, Collection<String> keys) {
