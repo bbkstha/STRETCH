@@ -11,12 +11,16 @@ import org.apache.ignite.internal.util.typedef.internal.LT;
 import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteBiPredicate;
 import org.apache.ignite.lang.IgniteBiTuple;
-import org.jetbrains.annotations.Nullable;
 
 import java.io.Serializable;
 import java.util.*;
+import java.util.logging.Logger;
 
 public class StretchAffinityFunction implements AffinityFunction, Serializable {
+
+    //public AffinityFunctionContext affinityFunctionContext;
+
+    private final static Logger LOGGER = Logger.getLogger(StretchAffinityFunction.class.getName());
 
 
     private static final char[] base32 = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'b', 'c', 'd', 'e', 'f',
@@ -25,7 +29,7 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
     private Map<String, Collection<ClusterNode>> subClusterInfo;
 
     /** Number of partitions. */
-    private int parts = 32;
+    private int parts = 10;
 
     /** Mask to use in calculation when partitions count is power of 2. */
     private int mask = -1;
@@ -38,6 +42,9 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 //    }
 
     public StretchAffinityFunction(int parts) {
+
+
+        //LOGGER.warning("STRETCH_AFFINITY_FUNCTION!!!!!!!!!!!");
 
         A.ensure(parts > 0, "parts > 0");
         setPartitions(parts);
@@ -79,15 +86,22 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
         }
 
         return U.safeAbs(key.hashCode() % parts);*/
-        char k = key.toString().charAt(0);
-        int part = 0;
+//        char k = key.toString().charAt(0);
+//        int part = 0;
+//
+//        for (int i=0; i< base32.length; i++) {
+//            if (k == base32[i]) {
+//                part = i;
+//                break;
+//            }
+//        }
+        //LOGGER.warning("STRETCH_AFFINITY_FUNCTION!!!!!!!!!!!");
+        //LOGGER.warning("STRETCH_AFFINITY_FUNCTION!!!!!!!!!!!"+part);
 
-        for (int i=0; i< base32.length; i++) {
-            if (k == base32[i]) {
-                part = i;
-                break;
-            }
-        }
+        int part = Integer.parseInt(key.toString()) % parts;
+
+        System.out.println("The key to partition map: key| "+key+" ==> partition| "+part);
+
 
         return part;
     }
@@ -102,30 +116,92 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
         // No-op.
     }
 
+    //public AffinityFunctionContext getAffinityFunctionContext() {
+//        return affinityFunctionContext;
+//    }
 
     /** {@inheritDoc} */
     @Override public List<List<ClusterNode>> assignPartitions(AffinityFunctionContext affCtx) {
+
+
+       // affinityFunctionContext = affCtx;
+
+        //affCtx.previousAssignment()
+        //affCtx.previousAssignment()
         List<List<ClusterNode>> assignments = new ArrayList<>(parts);
 
         /*Map<UUID, Collection<ClusterNode>> neighborhoodCache = exclNeighbors ?
                 GridCacheUtils.neighbors(affCtx.currentTopologySnapshot()) : null;*/
 
 
-
         List<ClusterNode> nodes = affCtx.currentTopologySnapshot();
 
-        Collection<ClusterNode> workerA = new ArrayList<ClusterNode>() {{
-                    add(nodes.get(0));
-                    add(nodes.get(1));
-                }};
 
-        Collection<ClusterNode> workerB = new ArrayList<ClusterNode>() {{
-            add(nodes.get(2));
-            add(nodes.get(3));
-        }};
+        System.out.println("The topology version is: "+affCtx.currentTopologyVersion());
 
-        subClusterInfo.put("A", workerA);
-        subClusterInfo.put("B", workerB);
+//
+
+       System.out.println("The discovery event short display is: "+affCtx.discoveryEvent().shortDisplay());
+       System.out.println("The event is: "+affCtx.discoveryEvent().shortDisplay().split(":")[0]);
+        System.out.println("Is the event: "+affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED"));
+
+
+
+
+        if(!affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED")){
+            for(int j=0; j<parts; j++){
+                List<ClusterNode> previousPartAssignment = affCtx.previousAssignment(j);
+                assignments.add(previousPartAssignment);
+            }
+
+            System.out.println("Except Node join case.");
+            return assignments;
+        }
+
+        ClusterNode newlyJoined = affCtx.discoveryEvent().eventNode();
+
+        String newHost = newlyJoined.hostNames().iterator().next();
+
+
+
+        Iterator<ClusterNode> it = affCtx.currentTopologySnapshot().iterator();
+        while(it.hasNext()){
+            ClusterNode tmp = it.next();
+            String tmpHost = tmp.hostNames().iterator().next();
+
+            if (tmpHost.equals(newHost) && !tmp.id().equals(newlyJoined.id())){
+
+
+                //backup the older data
+
+            }
+
+
+        }
+
+
+
+
+
+
+        //LOGGER.warning("Logging an INFO-level message");
+        //LOGGER.warning("The discovery event short display is: "+affCtx.discoveryEvent().shortDisplay());
+
+
+        //nodes.get(0);
+
+//        Collection<ClusterNode> workerA = new ArrayList<ClusterNode>() {{
+//                    add(nodes.get(0));
+//                   // add(nodes.get(1));
+//                }};
+
+//        Collection<ClusterNode> workerB = new ArrayList<ClusterNode>() {{
+//            add(nodes.get(1));
+//            //add(nodes.get(3));
+//        }};
+
+       // subClusterInfo.put("A", workerA);
+       // subClusterInfo.put("B", workerB);
 
 
 
@@ -155,7 +231,7 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
     public List<ClusterNode> assignPartition(int part,
                                              List<ClusterNode> nodes,
                                              int backups) {
-        if (nodes.size() <= 1)
+        if (nodes.size() < 1)
             return nodes;
 
         final int primaryAndBackups = backups == Integer.MAX_VALUE ? nodes.size() : Math.min(backups + 1, nodes.size());
@@ -165,26 +241,33 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
         char[] groupName = {'A', 'B', 'C', 'D'};
 
-        for(int i = 0; i< subClusterInfo.size(); i++){
+//        for(int i = 0; i< subClusterInfo.size(); i++){
+//
+//            Collection<ClusterNode> nodesPerGroup = subClusterInfo.get(groupName[i]);
+//            Iterator<ClusterNode> it = nodesPerGroup.iterator();
+//            int partsPerGroup = partsPerNode * nodesPerGroup.size();
+//            for(int j=0; j< nodesPerGroup.size(); j++){
+//
+//                int min = j * partsPerNode;
+//                int max = (j+1) * partsPerNode;
+//                if(part>=min && part < max){
+//                    while(it.hasNext()){
+//
+//                        res.add(it.next());
+//                        break;
+//                    }
+//
+//                }
+//            }
+//        }
 
-            Collection<ClusterNode> nodesPerGroup = subClusterInfo.get(groupName[i]);
-            Iterator<ClusterNode> it = nodesPerGroup.iterator();
-            int partsPerGroup = partsPerNode * nodesPerGroup.size();
-            for(int j=0; j< nodesPerGroup.size(); j++){
 
-                int min = j * partsPerNode;
-                int max = (j+1) * partsPerNode;
-                if(part>=min && part < max){
-                    while(it.hasNext()){
+        int size = nodes.size();
 
-                        res.add(it.next());
-                        break;
-                    }
+        int index =  part % size;
+        System.out.println("The partition tp node map: part= "+part+" goes to node= "+nodes.get(index));
 
-                }
-            }
-        }
-
+        res.add(nodes.get(index));
         return res;
 
 
@@ -404,6 +487,8 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
                     o1.get2().id().compareTo(o2.get2().id());
         }
     }
+
+
 
 
 }
