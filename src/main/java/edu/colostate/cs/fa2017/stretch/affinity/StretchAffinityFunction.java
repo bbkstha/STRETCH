@@ -1,15 +1,13 @@
-package com.colostate.cs.fa2017.affinity;
+package edu.colostate.cs.fa2017.stretch.affinity;
 
+import com.sun.xml.internal.bind.v2.runtime.unmarshaller.IntData;
+import org.apache.ignite.Ignite;
+import org.apache.ignite.cache.affinity.Affinity;
 import org.apache.ignite.cache.affinity.AffinityFunction;
 import org.apache.ignite.cache.affinity.AffinityFunctionContext;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
-import org.apache.ignite.internal.processors.cache.GridCacheUtils;
-import org.apache.ignite.internal.util.typedef.F;
 import org.apache.ignite.internal.util.typedef.internal.A;
-import org.apache.ignite.internal.util.typedef.internal.LT;
-import org.apache.ignite.internal.util.typedef.internal.U;
-import org.apache.ignite.lang.IgniteBiPredicate;
 import org.apache.ignite.lang.IgniteBiTuple;
 
 import java.io.Serializable;
@@ -141,43 +139,74 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
 //
 
+        affCtx.discoveryEvent();
+
        System.out.println("The discovery event short display is: "+affCtx.discoveryEvent().shortDisplay());
        System.out.println("The event is: "+affCtx.discoveryEvent().shortDisplay().split(":")[0]);
         System.out.println("Is the event: "+affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED"));
 
 
+//        if (!affCtx.discoveryEvent().equals(null)) {
+            if (affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED")) {
+                System.out.println("Node Join case.");
 
 
-        if(!affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED")){
-            for(int j=0; j<parts; j++){
-                List<ClusterNode> previousPartAssignment = affCtx.previousAssignment(j);
-                assignments.add(previousPartAssignment);
-            }
+                //ignite.affinity("MyCache");
 
-            System.out.println("Except Node join case.");
-            return assignments;
-        }
+                ClusterNode newlyJoined = affCtx.discoveryEvent().eventNode();
+                String group = newlyJoined.attribute("group");
+                String hostName = newlyJoined.hostNames().iterator().next();
+                List<ClusterNode> groupMembers = new ArrayList<>();
+                List<ClusterNode> idleHost = new ArrayList<>();
 
-        ClusterNode newlyJoined = affCtx.discoveryEvent().eventNode();
-
-        String newHost = newlyJoined.hostNames().iterator().next();
-
-
-
-        Iterator<ClusterNode> it = affCtx.currentTopologySnapshot().iterator();
-        while(it.hasNext()){
-            ClusterNode tmp = it.next();
-            String tmpHost = tmp.hostNames().iterator().next();
-
-            if (tmpHost.equals(newHost) && !tmp.id().equals(newlyJoined.id())){
+                for(ClusterNode node: affCtx.currentTopologySnapshot()){
+                    if(node.attribute("group").equals(group) && !node.equals(newlyJoined)){
+                        groupMembers.add(node);
+                    }
+                    else if(node.hostNames().iterator().next().equals(hostName)){
+                        idleHost.add(node);
+                    }
+                }
 
 
-                //backup the older data
+
+
 
             }
 
 
-        }
+//            for (int j = 0; j < parts; j++) {
+//                List<ClusterNode> previousPartAssignment = affCtx.previousAssignment(j);
+//                assignments.add(previousPartAssignment);
+//            }
+//
+//
+//
+//            ClusterNode newlyJoined = affCtx.discoveryEvent().eventNode();
+//
+//            String newHost = newlyJoined.hostNames().iterator().next();
+//
+//
+//            Iterator<ClusterNode> it = affCtx.currentTopologySnapshot().iterator();
+//            while (it.hasNext()) {
+//                ClusterNode tmp = it.next();
+//                String tmpHost = tmp.hostNames().iterator().next();
+//
+//                if (tmpHost.equals(newHost) && !tmp.id().equals(newlyJoined.id())) {
+//
+//
+//                    //backup the older data
+//
+//                }
+//
+//
+//            }
+//
+//            return assignments;
+
+//            }
+
+
 
 
 
