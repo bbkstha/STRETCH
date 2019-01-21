@@ -8,8 +8,10 @@ import org.apache.ignite.cache.affinity.AffinityFunctionContext;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.internal.util.typedef.internal.A;
+import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteBiTuple;
 
+import javax.swing.text.html.HTMLDocument;
 import java.io.Serializable;
 import java.util.*;
 import java.util.logging.Logger;
@@ -33,7 +35,9 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
     private int precision = 6;
 
-    private Map<String, Map<Long, ClusterNode>> clusterInfo = new TreeMap<>();
+    private int added_precision = precision + 1;
+
+    private Map<String, Map<Long, ClusterNode>> clusterInfo = new TreeMap<String, Map<Long, ClusterNode>>();
 
 
     /** Mask to use in calculation when partitions count is power of 2. */
@@ -89,6 +93,69 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
             throw new IllegalArgumentException("Null key is passed for a partition calculation. " +
                     "Make sure that an affinity key that is used is initialized properly.");
 
+        //Without considering masters: assuming all nodes as part of whole
+        int numberOfNodes = totalNodes;
+
+        String part = "";
+        part = part + key.toString().toLowerCase().charAt(added_precision);
+
+        if (numberOfNodes > 32 && numberOfNodes <= 1024) {
+            added_precision++;
+            part = part + key.toString().toLowerCase().charAt(added_precision);
+        } else if (numberOfNodes > 1024 && numberOfNodes <= 32768) {
+            added_precision += 2;
+            part = part + key.toString().toLowerCase().charAt(added_precision - 1) + key.toString().toLowerCase().charAt(added_precision);
+        } else if (numberOfNodes > 32768) {
+            System.out.println("Too many nodes!!");
+            return -1;
+        }
+
+
+        //Assuming each cluster group has equal number of nodes at the start.
+        int charRangePerNode = (int) Math.round(Math.pow(32, (added_precision - precision)) / numberOfNodes); //1 for #nodes = 32, 2 for #nodes = 16, 16 for nodes = 64 (32^2/64)etc.
+
+        int length = part.length();
+
+        int sum = 0;
+
+        for (int i = 0; i < length; i++) {
+
+            for (int j = 0; j < base32.length; j++) {
+                length--;
+                if (base32[j] == part.charAt(i)) {
+
+                    sum += (Math.pow(32, length) * j);
+                }
+            }
+        }
+
+        int nodeIndex = (int) Math.floor(sum / charRangePerNode);
+
+        List<ClusterNode> lst = new ArrayList<>();
+        Iterator<String> it = clusterInfo.keySet().iterator();
+
+        while (it.hasNext()) {
+            Map<Long, ClusterNode> ser = clusterInfo.get(it.next());
+            Iterator<Map.Entry<Long, ClusterNode>> it1 = ser.entrySet().iterator();
+            while (it1.hasNext()) {
+                lst.add(it1.next().getValue());
+            }
+        }
+
+        //ClusterNode destinationNode = lst.get(nodeIndex);
+
+        int partitionsPerNode = parts / totalNodes;
+
+        int start = nodeIndex * partitionsPerNode;
+        //int end = (nodeIndex + 1) * partitionsPerNode - 1;
+        int partID = start + key.hashCode() % partitionsPerNode;
+
+        System.out.println("The key to partition map: key| " + key + " ==> partition| " + partID);
+
+        return U.safeAbs(partID);
+    }
+
+
         /*if (mask >= 0) {
             int h;
 
@@ -108,16 +175,107 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
         //LOGGER.warning("STRETCH_AFFINITY_FUNCTION!!!!!!!!!!!");
         //LOGGER.warning("STRETCH_AFFINITY_FUNCTION!!!!!!!!!!!"+part);
 
-        char part = key.toString().toLowerCase().charAt(precision);
-        System.out.println("The key to partition map: key| "+key+" ==> partition| "+part);
 
+
+/*
         int numberOfMasters = clusterInfo.size();
+
+        String part = "";
+        part = part + key.toString().toLowerCase().charAt(added_precision);
+
+        if(numberOfMasters >32 && numberOfMasters <= 1024){
+            added_precision++;
+            part = part + key.toString().toLowerCase().charAt(added_precision);
+        }
+        else if(numberOfMasters > 1024 && numberOfMasters <= 32768){
+            added_precision+=2;
+            part = part + key.toString().toLowerCase().charAt(added_precision-1) + key.toString().toLowerCase().charAt(added_precision);
+        }
+        else if(numberOfMasters > 32768){
+            System.out.println("Too many masters!!");
+            return -1;
+        }
+
+
         int partitionsPerGroup = Math.round(parts/numberOfMasters);
         int partitionsPerNode = Math.round(parts/totalNodes);
+
         //Assuming each cluster group has equal number of nodes at the start.
         int nodesPerGroup = totalNodes/numberOfMasters;
-        int charRangePerGroup = Math.round(base32.length / numberOfMasters); //assuming number of masters <=32
-        int index = 0;
+        int charLenghtPerGroup = Math.round( (float) Math.pow(32, added_precision) / numberOfMasters); //1 for masters < 32, 2 for masters < 32*32, etc.
+
+        int length = part.length();
+
+        int sum = 0;
+
+        for(int i = 0; i< length; i++){
+
+            for (int j=0; j < base32.length; j++) {
+                length--;
+                if (base32[j] == part.charAt(i)) {
+
+                    sum += (Math.pow(32, length) * j);
+                }
+            }
+        }
+
+        sum++; //because sum is index so need to add one
+        int groupIndex = (int) Math.floor(sum / charLenghtPerGroup); //ClusterA -> 0 ;  ClusterB -> 1, etc
+
+
+
+        //Now find the appropriate node within the cluster group
+
+        Object clusterName =  clusterInfo.keySet().toArray()[groupIndex];
+        Map<Long, ClusterNode> servers = clusterInfo.get(clusterName);
+        int serversCount= servers.size();
+
+        String localPart = "";
+        part = part + key.toString().toLowerCase().charAt(added_precision);
+
+        if(numberOfMasters >32 && numberOfMasters <= 1024){
+            added_precision++;
+            part = part + key.toString().toLowerCase().charAt(added_precision);
+        }
+        else if(numberOfMasters > 1024 && numberOfMasters <= 32768){
+            added_precision+=2;
+            part = part + key.toString().toLowerCase().charAt(added_precision-1) + key.toString().toLowerCase().charAt(added_precision);
+        }
+        else if(numberOfMasters > 32768){
+            System.out.println("Too many masters!!");
+            return -1;
+        }
+*/
+        //partition within the range: nodeIndex * partitionsPerNode - (nodeIndex+1) * partitionsPerNode
+/*        Map<Long, ClusterNode> servers = clusterInfo.get(clusterName);
+        int serversCount= servers.size()
+        int charRangePerGroup = Math.round( (float) Math.pow(32, added_precision) / numberOfMasters); //assuming number of masters <=32
+
+        int length = part.length();
+
+        int sum = 0;
+
+        for(int i = 0; i< length; i++){
+
+            for (int j=0; j < base32.length; j++) {
+                length--;
+                if (base32[j] == part.charAt(i)) {
+
+                    sum += (Math.pow(32, length) * j);
+                }
+            }
+        }
+
+        sum++; //because sum is index so need to add one
+        int groupIndex = (int) Math.floor(sum / charRangePerGroup); //ClusterA -> 0 ;  ClusterB -> 1, etc
+
+
+
+
+
+
+
+
 
         for (int i=0; i< base32.length; i++) {
 
@@ -206,17 +364,8 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
                 }
             }
         }
+        return part;*/
 
-
-        return part;
-
-
-
-
-
-
-
-    }
 
     /** {@inheritDoc} */
     @Override public int partitions() {
@@ -237,101 +386,138 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
 
 
-       this.totalNodes = affCtx.currentTopologySnapshot().size();
+            if (affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED")) {
+                System.out.println("Node Join case.");
+                ClusterNode newlyJoined = affCtx.discoveryEvent().eventNode();
+                String group = newlyJoined.attribute("group");
+                String hostName = newlyJoined.hostNames().iterator().next();
+                String donated = newlyJoined.attribute("donated");
 
-        //affCtx.previousAssignment()
-        //affCtx.previousAssignment()
+                if(donated.toLowerCase()=="yes"){
+                    List<List<ClusterNode>> previousAssignments = new ArrayList<>(parts);
+                    for(int i=0; i < parts; i++){
+                        previousAssignments.add(affCtx.previousAssignment(i));
+                    }
+
+                    Map<Long, ClusterNode> localClusterInfo = clusterInfo.get(group);
+                    Iterator<Map.Entry<Long, ClusterNode>> it = localClusterInfo.entrySet().iterator();
+
+
+                    Map<Integer, ClusterNode> highestActiveJobs = new TreeMap<>();
+                    Map<Long, ClusterNode> nonheapUsed = new TreeMap<>();
+                    Map<Double, ClusterNode> cpuUsed = new TreeMap<>();
+
+                    Map<Double, ClusterNode> hotspot = new TreeMap<>();
+
+                    while(it.hasNext()){
+
+                        ClusterNode n = it.next().getValue();
+                        int a = n.metrics().getCurrentActiveJobs();
+                        long b = n.metrics().getNonHeapMemoryUsed();
+                        double c = n.metrics().getCurrentCpuLoad();
+                        double contrib = a * 0.33 + b * 0.33 + c* 0.33;
+                        hotspot.put(contrib, n);
+                    }
+
+                    ClusterNode hotspotNode = ((TreeMap<Double, ClusterNode>) hotspot).descendingMap().firstEntry().getValue();
+
+                    // share partitions from the hotspot node to newly joined node.
+
+                    Map.Entry<Integer, ClusterNode> integerClusterNodeEntry = ((TreeMap<Integer, ClusterNode>) highestActiveJobs).firstEntry();
+
+
+                }
+            }
+
+
+
+
+
+
         List<List<ClusterNode>> assignments = new ArrayList<>(parts);
-
-        /*Map<UUID, Collection<ClusterNode>> neighborhoodCache = exclNeighbors ?
-                GridCacheUtils.neighbors(affCtx.currentTopologySnapshot()) : null;*/
-
-       Map<Long, ClusterNode> map = new TreeMap<>();
-
-        List<String> allMasters = new ArrayList<>();
-
+        Map<Long, ClusterNode> map = new TreeMap<>();
         List<ClusterNode> nodes = affCtx.currentTopologySnapshot();
-        for(ClusterNode node: nodes) {
 
+        for (ClusterNode node : nodes) {
             String groupName = node.attribute("group");
-            String role = node.attribute("role");
-            if(role.toLowerCase().equals("master"))
-                allMasters.add(groupName);
-
-            String hostName = node.hostNames().iterator().next();
-
+            //String role = node.attribute("role");
+            //String hostName = node.hostNames().iterator().next();
             map.put(node.order(), node);
             clusterInfo.put(groupName, map);
         }
 
-        allMasters.sort(String::compareToIgnoreCase);
+        List<ClusterNode> lst = new ArrayList<>();
+        Iterator<String> it = clusterInfo.keySet().iterator();
 
-        int mastersCount = allMasters.size();
+        while (it.hasNext()) {
+            Map<Long, ClusterNode> ser = clusterInfo.get(it.next());
+            Iterator<Map.Entry<Long, ClusterNode>> it1 = ser.entrySet().iterator();
+            while (it1.hasNext()) {
+                lst.add(it1.next().getValue());
+            }
+        }
 
-        int partitonsPerGroup = parts/mastersCount;
-
-        int index = 0;
-
+        this.totalNodes = affCtx.currentTopologySnapshot().size();
+        int partitionsPerNode = parts / totalNodes;
         for (int i = 0; i < parts; i++) {
-            while(index<mastersCount) {
-                if (i >= index * partitonsPerGroup && i < index * partitonsForEachGroup) {
-                    Map<Long, ClusterNode> servers = clusterInfo.get(allMasters.get(index));
-                    int serverCount = servers.size();
-                    int partitionsForServer = partitonsPerGroup/serverCount;
-
+            int index = 0;
+            while (index < totalNodes) {
+                if (i >= index * partitionsPerNode && i < (index + 1) * partitionsPerNode) {
+                    List<ClusterNode> partAssignment = new ArrayList<>(1);
+                    partAssignment.add(lst.get(index));
+                    System.out.println("The node for partition id: "+i+" is: "+lst.get(index));
+                    assignments.add(partAssignment);
+                    break;
                 }
                 index++;
             }
-
-
-            List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups());
-
-            assignments.add(partAssignment);
         }
+        return assignments;
+    }
 
 
 
 
 
 
-        System.out.println("The topology version is: "+affCtx.currentTopologyVersion());
-
+//        System.out.println("The topology version is: "+affCtx.currentTopologyVersion());
 //
-
-        affCtx.discoveryEvent();
-
-       System.out.println("The discovery event short display is: "+affCtx.discoveryEvent().shortDisplay());
-       System.out.println("The event is: "+affCtx.discoveryEvent().shortDisplay().split(":")[0]);
-        System.out.println("Is the event: "+affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED"));
-
-
-//        if (!affCtx.discoveryEvent().equals(null)) {
-            if (affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED")) {
-                System.out.println("Node Join case.");
-
-
-                //ignite.affinity("MyCache");
-
-                ClusterNode newlyJoined = affCtx.discoveryEvent().eventNode();
-                String group = newlyJoined.attribute("group");
-                String hostName = newlyJoined.hostNames().iterator().next();
-                List<ClusterNode> groupMembers = new ArrayList<>();
-                List<ClusterNode> idleHost = new ArrayList<>();
-
-                for(ClusterNode node: affCtx.currentTopologySnapshot()){
-                    if(node.attribute("group").equals(group) && !node.equals(newlyJoined)){
-                        groupMembers.add(node);
-                    }
-                    else if(node.hostNames().iterator().next().equals(hostName)){
-                        idleHost.add(node);
-                    }
-                }
-
-
-
-
-
-            }
+////
+//
+//        affCtx.discoveryEvent();
+//
+//       System.out.println("The discovery event short display is: "+affCtx.discoveryEvent().shortDisplay());
+//       System.out.println("The event is: "+affCtx.discoveryEvent().shortDisplay().split(":")[0]);
+//        System.out.println("Is the event: "+affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED"));
+//
+//
+////        if (!affCtx.discoveryEvent().equals(null)) {
+//            if (affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED")) {
+//                System.out.println("Node Join case.");
+//
+//
+//                //ignite.affinity("MyCache");
+//
+//                ClusterNode newlyJoined = affCtx.discoveryEvent().eventNode();
+//                String group = newlyJoined.attribute("group");
+//                String hostName = newlyJoined.hostNames().iterator().next();
+//                List<ClusterNode> groupMembers = new ArrayList<>();
+//                List<ClusterNode> idleHost = new ArrayList<>();
+//
+//                for(ClusterNode node: affCtx.currentTopologySnapshot()){
+//                    if(node.attribute("group").equals(group) && !node.equals(newlyJoined)){
+//                        groupMembers.add(node);
+//                    }
+//                    else if(node.hostNames().iterator().next().equals(hostName)){
+//                        idleHost.add(node);
+//                    }
+//                }
+//
+//
+//
+//
+//
+//            }
 
 
 //            for (int j = 0; j < parts; j++) {
@@ -390,18 +576,6 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
        // subClusterInfo.put("A", workerA);
        // subClusterInfo.put("B", workerB);
-
-
-
-
-
-
-
-
-        return assignments;
-    }
-
-
 
 
     /**
