@@ -392,12 +392,19 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
                 String group = newlyJoined.attribute("group");
                 String hostName = newlyJoined.hostNames().iterator().next();
                 String donated = newlyJoined.attribute("donated");
+                //Hotspot info coming via config xml
+                String hotspot_node = newlyJoined.attribute("hotspot");
+                String hotspot_type = newlyJoined.attribute("hotspot_type");
+                String hotspot_partitions = newlyJoined.attribute("hotspot_partitions");
+
 
                 if(donated.toLowerCase()=="yes"){
                     List<List<ClusterNode>> previousAssignments = new ArrayList<>(parts);
                     for(int i=0; i < parts; i++){
                         previousAssignments.add(affCtx.previousAssignment(i));
                     }
+
+
 
                     Map<Long, ClusterNode> localClusterInfo = clusterInfo.get(group);
                     Iterator<Map.Entry<Long, ClusterNode>> it = localClusterInfo.entrySet().iterator();
@@ -418,14 +425,9 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
                         double contrib = a * 0.33 + b * 0.33 + c* 0.33;
                         hotspot.put(contrib, n);
                     }
-
                     ClusterNode hotspotNode = ((TreeMap<Double, ClusterNode>) hotspot).descendingMap().firstEntry().getValue();
-
                     // share partitions from the hotspot node to newly joined node.
-
                     Map.Entry<Integer, ClusterNode> integerClusterNodeEntry = ((TreeMap<Integer, ClusterNode>) highestActiveJobs).firstEntry();
-
-
                 }
             }
 
