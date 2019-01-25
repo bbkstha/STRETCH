@@ -1,17 +1,16 @@
 package edu.colostate.cs.fa2017.stretch.affinity;
 
-import com.sun.xml.internal.bind.v2.runtime.unmarshaller.IntData;
-import org.apache.ignite.Ignite;
+
+import org.apache.ignite.Ignition;
 import org.apache.ignite.cache.affinity.Affinity;
 import org.apache.ignite.cache.affinity.AffinityFunction;
 import org.apache.ignite.cache.affinity.AffinityFunctionContext;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
+import org.apache.ignite.internal.processors.cache.GridCacheUtils;
 import org.apache.ignite.internal.util.typedef.internal.A;
-import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteBiTuple;
 
-import javax.swing.text.html.HTMLDocument;
 import java.io.Serializable;
 import java.util.*;
 import java.util.logging.Logger;
@@ -29,7 +28,10 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
     private Map<String, Collection<ClusterNode>> subClusterInfo;
 
     /** Number of partitions. */
-    private int default_parts = 3200;
+    private int default_parts = 200;
+
+    private boolean exclNeighbors = false;
+
 
     private int parts;
 
@@ -45,6 +47,8 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
     private static final Comparator<IgniteBiTuple<Long, ClusterNode>> COMPARATOR = new HashComparator();
     private int totalNodes;
+
+    private static Map<Integer, Long> partitionToCount;
 
 
     public StretchAffinityFunction() {
@@ -93,7 +97,9 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
             throw new IllegalArgumentException("Null key is passed for a partition calculation. " +
                     "Make sure that an affinity key that is used is initialized properly.");
 
-        //Without considering masters: assuming all nodes as part of whole
+        //Testing
+        return key.hashCode() % parts;
+/*        //Without considering masters: assuming all nodes as part of whole
         int numberOfNodes = totalNodes;
 
         String part = "";
@@ -152,7 +158,22 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
         System.out.println("The key to partition map: key| " + key + " ==> partition| " + partID);
 
-        return U.safeAbs(partID);
+        if(partitionToCount.containsKey(partID)){
+
+            partitionToCount.put(partID, partitionToCount.get(partID)+1);
+        }
+        else {
+
+            partitionToCount.put(partID, (long) 1);
+        }
+
+        return U.safeAbs(partID);*/
+    }
+
+
+    public Long getPartitionToKeyCount(int part){
+
+        return partitionToCount.get(part);
     }
 
 
@@ -384,59 +405,169 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
     /** {@inheritDoc} */
     @Override public List<List<ClusterNode>> assignPartitions(AffinityFunctionContext affCtx) {
 
+        List<List<ClusterNode>> assignments = new ArrayList<>(parts);
+        List<ClusterNode> nodes = affCtx.currentTopologySnapshot();
+        Map<UUID, Collection<ClusterNode>> neighborhoodCache = exclNeighbors ?
+                GridCacheUtils.neighbors(affCtx.currentTopologySnapshot()) : null;
 
 
-            if (affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED")) {
-                System.out.println("Node Join case.");
-                ClusterNode newlyJoined = affCtx.discoveryEvent().eventNode();
-                String group = newlyJoined.attribute("group");
-                String hostName = newlyJoined.hostNames().iterator().next();
-                String donated = newlyJoined.attribute("donated");
+        if (affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED")) {
+            System.out.println("Node Join case.");
+            ClusterNode newlyJoinedNode = affCtx.discoveryEvent().eventNode();
+            String donated = newlyJoinedNode.attribute("donated");
+            List<ClusterNode> newList = new ArrayList<>();
+            newList.add(newlyJoinedNode);
+            String[] partitionsToMove = null;
+            System.out.println("Is the node donated: " + donated);
+
+            if (donated.equals("yes")) {
+
+                System.out.println("The size of nodes is: " + nodes.size());
+                nodes.remove(newlyJoinedNode);
+                System.out.println("The size of nodes is: " + nodes.size());
+                System.out.println("ENtering partiton movement!");
                 //Hotspot info coming via config xml
-                String hotspot_node = newlyJoined.attribute("hotspot");
-                String hotspot_type = newlyJoined.attribute("hotspot_type");
-                String hotspot_partitions = newlyJoined.attribute("hotspot_partitions");
-
-
-                if(donated.toLowerCase()=="yes"){
-                    List<List<ClusterNode>> previousAssignments = new ArrayList<>(parts);
-                    for(int i=0; i < parts; i++){
-                        previousAssignments.add(affCtx.previousAssignment(i));
-                    }
-
-
-
-                    Map<Long, ClusterNode> localClusterInfo = clusterInfo.get(group);
-                    Iterator<Map.Entry<Long, ClusterNode>> it = localClusterInfo.entrySet().iterator();
-
-
-                    Map<Integer, ClusterNode> highestActiveJobs = new TreeMap<>();
-                    Map<Long, ClusterNode> nonheapUsed = new TreeMap<>();
-                    Map<Double, ClusterNode> cpuUsed = new TreeMap<>();
-
-                    Map<Double, ClusterNode> hotspot = new TreeMap<>();
-
-                    while(it.hasNext()){
-
-                        ClusterNode n = it.next().getValue();
-                        int a = n.metrics().getCurrentActiveJobs();
-                        long b = n.metrics().getNonHeapMemoryUsed();
-                        double c = n.metrics().getCurrentCpuLoad();
-                        double contrib = a * 0.33 + b * 0.33 + c* 0.33;
-                        hotspot.put(contrib, n);
-                    }
-                    ClusterNode hotspotNode = ((TreeMap<Double, ClusterNode>) hotspot).descendingMap().firstEntry().getValue();
-                    // share partitions from the hotspot node to newly joined node.
-                    Map.Entry<Integer, ClusterNode> integerClusterNodeEntry = ((TreeMap<Integer, ClusterNode>) highestActiveJobs).firstEntry();
+                String hotspot_partitions = newlyJoinedNode.attribute("hotspot_partitions"); //separated by commas
+                partitionsToMove = hotspot_partitions.split(",");
+                for (int k = 0; k < partitionsToMove.length; k++) {
+                    System.out.println("The donation made: " + partitionsToMove[k]);
                 }
             }
+            boolean flag = donated.equals("yes");
+            int j = 0;
+            for (int i = 0; i < parts; i++) {
+                if (flag && j < partitionsToMove.length) {
+                    if (i == Integer.parseInt(partitionsToMove[j])) {
+                        List<ClusterNode> partAssignment = newList;
+                        j++;
+                        System.out.println("The node for moved partition id: " + i + " is: " + newlyJoinedNode);
+                        assignments.add(partAssignment);
+                    } else {
+                        //System.out.println("The node for moved partition id: " + i + " is: " + affCtx.previousAssignment(i));
+                        //assignments.add(affCtx.previousAssignment(i));
+                        List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups());
+                        assignments.add(partAssignment);
+                    }
+                } else {
+
+                    List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups());
+                    assignments.add(partAssignment);
+                }
+            }
+        }
+        return assignments;
+    }
 
 
 
 
 
 
-        List<List<ClusterNode>> assignments = new ArrayList<>(parts);
+
+
+
+
+
+
+           /*     System.out.println("ENtering partiton movement!");
+
+
+
+                //Hotspot info coming via config xml
+                String hotspot_partitions = newlyJoinedNode.attribute("hotspot_partitions"); //separated by commas
+                String[] partitionsToMove = hotspot_partitions.split(",");
+                for(int k =0; k< partitionsToMove.length; k++){
+                    System.out.println("The donation made: "+partitionsToMove[k]);
+
+                }
+
+                int j = 0;
+
+                for (int i = 0; i < parts; i++) {
+
+                    if(j<partitionsToMove.length){
+
+                        if (i == Integer.parseInt(partitionsToMove[j])) {
+                            assignments.add(newList);
+                            j++;
+                            System.out.println("The node for moved partition id: " + i + " is: " + newlyJoinedNode);
+
+                        }
+                        else {
+                            System.out.println("The node for moved partition id: " + i + " is: " + affCtx.previousAssignment(i));
+                            assignments.add(affCtx.previousAssignment(i));
+                        }
+                    }
+                    else {
+                        System.out.println("The node for moved partition id: " + i + " is: " + affCtx.previousAssignment(i));
+                        assignments.add(affCtx.previousAssignment(i));
+                    }
+                }
+
+                ///return assignments;
+            } else {
+
+                List<ClusterNode> lst = new ArrayList<>();
+                lst = affCtx.currentTopologySnapshot();
+                this.totalNodes = affCtx.currentTopologySnapshot().size();
+                int partitionsPerNode = parts / totalNodes;
+                for (int i = 0; i < parts; i++) {
+                    int index = 0;
+                    while (index < totalNodes) {
+                        if (i >= index * partitionsPerNode && i < (index + 1) * partitionsPerNode) {
+                            List<ClusterNode> partAssignment = new ArrayList<>(1);
+                            partAssignment.add(lst.get(index));
+                            System.out.println("The node for partition id: " + i + " is: " + lst.get(index));
+                            assignments.add(partAssignment);
+                            break;
+                        }
+                        index++;
+                    }
+                }
+            }
+            //return assignments;
+        }
+        return assignments;
+    }
+*/
+
+
+//                    Map<Integer, ClusterNode> highestActiveJobs = new TreeMap<>();
+//                    Map<Long, ClusterNode> nonheapUsed = new TreeMap<>();
+//                    Map<Double, ClusterNode> cpuUsed = new TreeMap<>();
+//                    Map<Double, ClusterNode> hotspot = new TreeMap<>();
+//                    Map<Long, ClusterNode> localClusterInfo = clusterInfo.get(group);
+//                    Iterator<Map.Entry<Long, ClusterNode>> it = localClusterInfo.entrySet().iterator();
+//                    while(it.hasNext()){
+//                        ClusterNode n = it.next().getValue();
+//                        if(n.id().toString()==hotspot_node){
+//
+//                        get
+//
+//
+//
+//                            break;
+//                        }
+//
+//
+//                        int a = n.metrics().getCurrentActiveJobs();
+//                        long b = n.metrics().getNonHeapMemoryUsed();
+//                        double c = n.metrics().getCurrentCpuLoad();
+//                        double contrib = a * 0.33 + b * 0.33 + c* 0.33;
+//                        hotspot.put(contrib, n);
+//                    }
+//                    ClusterNode hotspotNode = ((TreeMap<Double, ClusterNode>) hotspot).descendingMap().firstEntry().getValue();
+//                    // share partitions from the hotspot node to newly joined node.
+//                    Map.Entry<Integer, ClusterNode> integerClusterNodeEntry = ((TreeMap<Integer, ClusterNode>) highestActiveJobs).firstEntry();
+
+
+
+
+
+
+
+
+ /*       List<List<ClusterNode>> assignments = new ArrayList<>(parts);
         Map<Long, ClusterNode> map = new TreeMap<>();
         List<ClusterNode> nodes = affCtx.currentTopologySnapshot();
 
@@ -475,7 +606,7 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
             }
         }
         return assignments;
-    }
+    }*/
 
 
 

@@ -1,0 +1,9 @@
+<property name="userAttributes">
+    <map>
+        <entry key="group" value="D"/>
+        <entry key="role" value="worker"/>
+        <entry key="hotspot" value="clusterNode.id()"/>
+        <entry key="hotspot_type" value="CPU or storage or both"/>
+        <entry key="hotspot_partitions" value="150,172,186"/>
+    </map>
+</property>

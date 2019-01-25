@@ -1,14 +1,12 @@
 package edu.colostate.cs.fa2017.stretch.groups.D;
 
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunction;
-import org.apache.ignite.Ignite;
-import org.apache.ignite.IgniteCache;
-import org.apache.ignite.IgniteMessaging;
-import org.apache.ignite.Ignition;
+import org.apache.ignite.*;
 import org.apache.ignite.cache.CacheMode;
 import org.apache.ignite.cache.CachePeekMode;
 import org.apache.ignite.cache.CacheRebalanceMode;
 import org.apache.ignite.cache.affinity.Affinity;
+import org.apache.ignite.cache.affinity.rendezvous.RendezvousAffinityFunction;
 import org.apache.ignite.cluster.ClusterGroup;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
@@ -39,6 +37,7 @@ public class MasterD {
         cacheCfg.setName(cacheName);
         cacheCfg.setCacheMode(CacheMode.PARTITIONED);
 
+
         StretchAffinityFunction stretchAffinityFunction = new StretchAffinityFunction();
         stretchAffinityFunction.setPartitions(2000);
         cacheCfg.setAffinity(stretchAffinityFunction);
@@ -48,6 +47,7 @@ public class MasterD {
         Map<String, String> userAtt = new HashMap<String, String>() {{
             put("group", "D");
             put("role", "master");
+            put("donated","no");
         }};
 
 
@@ -114,12 +114,31 @@ public class MasterD {
                 cache.get(i);
             }
 
-            ignite.cluster().forAttribute("","").forCacheNodes(cacheName)
+            UUID hotspotNodeID = null;
+            IgniteCompute compute = ignite.compute(clusterGroupD.forNodeId(hotspotNodeID));
+            compute.apply(
+                    (String word) -> {
+                        System.out.println();
+                        System.out.println(">>> Printing '" + word + "' on this node from ignite job.");
+
+                        // Return number of letters in the word.
+                        return word.length();
+                    },
+                    // Job parameters. Ignite will create as many jobs as there are parameters.
+                    Arrays.asList("Count characters using closure".split(" "))
+            );
+
+
+
+
+            ignite.cluster().forAttribute("","").forCacheNodes(cacheName);
             //cache.loadCache();
 
 
             //Local cache peek to find the size of partitions in the node
             ClusterNode node = ignite.cluster().localNode();
+
+
             Map<Integer, Long> partitionToCount = new TreeMap<>();
             //Map<Integer, > partitionToHitInfo = new TreeMap<>();
             int[] partitions = affinity.allPartitions(node);

@@ -1,0 +1,40 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="
+        http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd">
+    <bean id="ignite.cfg" class="org.apache.ignite.configuration.IgniteConfiguration">
+        <property name="cacheConfiguration">
+            <list>
+                <!-- Partitioned cache example configuration (Atomic mode). -->
+                <bean class="org.apache.ignite.configuration.CacheConfiguration">
+                    <property name="name" value="MyCache"/>
+                    <property name="atomicityMode" value="ATOMIC"/>
+                    <property name="backups" value="0"/>
+
+                    <!-- Creating the affinity function with custom setting. -->
+                    <property name="affinity">
+                        <bean class="edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunction">
+                            <property name="excludeNeighbors" value="false"/>
+                            <property name="partitions" value="200"/>
+                        </bean>
+                    </property>
+
+
+                </bean>
+            </list>
+        </property>
+
+        <!--Cluster Group Attributes-->
+        <property name="userAttributes">
+            <map>
+                <entry key="group" value="D"/>
+                <entry key="role" value="worker"/>
+                <entry key="donated" value="yes"/>
+                <entry key="hotspot_partitions" value="25,100,150"/>
+
+
+            </map>
+        </property>
+    </bean>
+</beans>

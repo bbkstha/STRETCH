@@ -1,0 +1,46 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="
+        http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd">
+    <bean id="ignite.cfg" class="org.apache.ignite.configuration.IgniteConfiguration">
+    <!--
+    Explicitly configure TCP discovery SPI to provide list of initial
+    nodes from the second cluster.
+    -->
+    <property name="discoverySpi">
+        <bean class="org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi">
+            <!-- Initial local port to listen to. -->
+            <property name="localPort" value="49500"/>
+
+            <!-- Changing local port range. This is an optional action. -->
+            <property name="localPortRange" value="20"/>
+
+            <!-- Setting up IP finder for this cluster -->
+            <property name="ipFinder">
+                <bean class="org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder">
+                    <property name="addresses">
+                        <list>
+                            <!--
+                            Addresses and port range of the nodes from the second                             cluster.
+                            127.0.0.1 can be replaced with actual IP addresses or                             host names. Port range is optional.
+                            -->
+                            <value>cut-bank</value>
+                        </list>
+                    </property>
+                </bean>
+            </property>
+        </bean>
+    </property>
+
+    <!--
+    Explicitly configure TCP communication SPI changing local port number
+    for the nodes from the second cluster.
+    -->
+    <property name="communicationSpi">
+        <bean class="org.apache.ignite.spi.communication.tcp.TcpCommunicationSpi">
+            <property name="localPort" value="49100"/>
+        </bean>
+    </property>
+</bean>
+</beans>
