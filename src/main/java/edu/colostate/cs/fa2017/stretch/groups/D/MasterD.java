@@ -3,10 +3,8 @@ package edu.colostate.cs.fa2017.stretch.groups.D;
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunction;
 import org.apache.ignite.*;
 import org.apache.ignite.cache.CacheMode;
-import org.apache.ignite.cache.CachePeekMode;
 import org.apache.ignite.cache.CacheRebalanceMode;
 import org.apache.ignite.cache.affinity.Affinity;
-import org.apache.ignite.cache.affinity.rendezvous.RendezvousAffinityFunction;
 import org.apache.ignite.cluster.ClusterGroup;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
@@ -114,21 +112,7 @@ public class MasterD {
                 cache.get(i);
             }
 
-            UUID hotspotNodeID = null;
-            IgniteCompute compute = ignite.compute(clusterGroupD.forNodeId(hotspotNodeID));
-            compute.apply(
-                    (String word) -> {
-                        System.out.println();
-                        System.out.println(">>> Printing '" + word + "' on this node from ignite job.");
-
-                        // Return number of letters in the word.
-                        return word.length();
-                    },
-                    // Job parameters. Ignite will create as many jobs as there are parameters.
-                    Arrays.asList("Count characters using closure".split(" "))
-            );
-
-
+           
 
 
             ignite.cluster().forAttribute("","").forCacheNodes(cacheName);

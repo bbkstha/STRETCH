@@ -7,18 +7,25 @@ import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteMessaging;
 import org.apache.ignite.Ignition;
 import org.apache.ignite.cache.CacheMode;
+import org.apache.ignite.cache.CachePeekMode;
 import org.apache.ignite.cache.CacheRebalanceMode;
 import org.apache.ignite.cluster.ClusterGroup;
+import org.apache.ignite.cluster.ClusterMetrics;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.DataRegionConfiguration;
 import org.apache.ignite.configuration.DataStorageConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
+import org.apache.ignite.internal.IgniteInterruptedCheckedException;
 import org.apache.ignite.lang.IgniteBiPredicate;
+import org.apache.ignite.lang.IgniteClosure;
 
 import java.util.*;
 
-public class ClusterMaster {
+import static org.apache.ignite.internal.util.IgniteUtils.fl;
+import static org.apache.ignite.internal.util.IgniteUtils.sleep;
+
+public class ClusterMasterX {
 
     private static final String cacheName = "STRETCH-CACHE";
 
@@ -47,7 +54,6 @@ public class ClusterMaster {
         cacheConfiguration.setAffinity(stretchAffinityFunctionX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.ASYNC);
 
-
         // Changing total RAM size to be used by Ignite Node.
         DataStorageConfiguration storageCfg = new DataStorageConfiguration();
         DataRegionConfiguration regionCfg = new DataRegionConfiguration();
@@ -56,7 +62,7 @@ public class ClusterMaster {
         // Setting the size of the default memory region to 80MB to achieve this.
         regionCfg.setInitialSize(
                 10L * 1024 * 1024);
-        regionCfg.setMaxSize(80L * 1024 * 1024);
+        regionCfg.setMaxSize(800L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
@@ -67,11 +73,10 @@ public class ClusterMaster {
 
 
 
-
-
         Map<String, String> userAtt = new HashMap<String, String>() {{
             put("group",groupName);
             put("role", "master");
+            put("donated","no");
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setUserAttributes(userAtt);
@@ -212,13 +217,119 @@ public class ClusterMaster {
                 }
             });
 
+
+            //0. Listen to Resource Monitor
+            mastersMessanger.remoteListen(RESOURCE_MONITOR, new IgniteBiPredicate<UUID, Object>() {
+                        @Override
+                        public boolean apply(UUID nodeId, Object msg) {
+
+                                String groupName = ignite.cluster().localNode().attribute("group");
+                                ClusterGroup clusterGroup = ignite.cluster().forAttribute("group", groupName);
+
+                                System.out.println("The size of the subCluster is: "+clusterGroup.nodes().size());
+                                for(ClusterNode c: clusterGroup.nodes()){
+                                    System.out.println("The nonHeapMemeory initialized (MB): "+c.metrics().getNonHeapMemoryInitialized()/(1024*1024));
+                                    System.out.println("The nonHeapMemeory max (MB): "+c.metrics().getNonHeapMemoryMaximum()/(1024*1024));
+                                    System.out.println("The nonHeapMemeory committed (MB): "+c.metrics().getNonHeapMemoryCommitted()/(1024*1024));
+                                    System.out.println("The nonHeapMemeory used (MB): "+c.metrics().getNonHeapMemoryUsed()/(1024*1024));
+                                    System.out.println("The nonHeapMemeory total (MB): "+c.metrics().getNonHeapMemoryTotal()/(1024*1024));
+                                }
+
+                                System.out.println("---------------------------------------------------------------------------------------------");
+
+                                ClusterMetrics clusterMetrics = clusterGroup.metrics();
+
+                                long startTimeMills = clusterMetrics.getStartTime();
+                                long committedMemory = clusterMetrics.getNonHeapMemoryCommitted();
+                                long usedMemory = clusterMetrics.getNonHeapMemoryUsed();
+                                System.out.println("UsedMemory: " + usedMemory + " and AllocatedMemory: " + committedMemory);
+                                long currentTimeMillis = System.currentTimeMillis();
+
+                                double usage = usedMemory * (100 / (double) committedMemory); //usage percentage (Bytes)
+                                double usageRate = usedMemory * 1000 / (currentTimeMillis - startTimeMills); //usage per second
+                                double standardUsage = 47683.7158203; //50MB per second
+                                System.out.println("For Cluster: " + groupName);
+                                System.out.println("Usage: " + usage + " and usageRage: " + usageRate);
+
+                                if (usage > 95 || usageRate > standardUsage) {
+
+                                    Map<Double, ClusterNode> nodeToUsage = new TreeMap<>();
+                                    Collection<ClusterNode> nodes = clusterGroup.nodes();
+                                    Iterator<ClusterNode> iterator = nodes.iterator();
+                                    while (iterator.hasNext()) {
+                                        ClusterNode n = iterator.next();
+                                        double localUsage = n.metrics().getNonHeapMemoryUsed() / (double) n.metrics().getNonHeapMemoryCommitted();
+                                        boolean flag = true;
+                                        while(flag){
+                                            if(!nodeToUsage.containsKey(localUsage)){
+                                                nodeToUsage.put(localUsage, n);
+                                                flag = false;
+                                            }
+                                            else{
+                                                localUsage+=0.001;
+                                            }
+                                        }
+                                    }
+
+                                    ClusterNode hotspotNode = ((TreeMap<Double, ClusterNode>) nodeToUsage).lastEntry().getValue();
+                                    //Finding hot partition
+                                    int[] part = ignite.affinity(cacheName).allPartitions(hotspotNode);
+                                    ClusterGroup hotspotCluster = ignite.cluster().forNode(hotspotNode);
+
+                                    TreeMap<Integer, Long> map = ignite.compute(hotspotCluster).apply(
+
+                                            new IgniteClosure<Integer, TreeMap<Integer, Long>>() {
+                                                @Override
+                                                public TreeMap<Integer, Long> apply(Integer x) {
+
+                                                    TreeMap<Integer, Long> partToCount = new TreeMap<>();
+                                                    for (int i = 0; i < part.length; i++) {
+                                                        Long ig = ignite.cache(cacheName).localSizeLong(part[i], CachePeekMode.PRIMARY);
+
+                                                        partToCount.put(part[i], ig);
+                                                    }
+                                                    return partToCount;
+                                                }
+                                            },
+                                            1
+                                    );
+
+                                    //calculate skewness
+
+                                    String hotspotPartitions = "";
+                                    for (int j = 0; j < part.length; j = j + 2) {
+
+                                        hotspotPartitions += Integer.toString(part[j]) + ",";
+                                        System.out.println("The partition is: " + part[j] + " and the count is: " + map.get(part[j]));
+                                    }
+
+                                    mastersMessanger.send(REQUEST_TOPIC, (Object) hotspotPartitions);
+                                }
+                            try {
+                                sleep(10000);
+                            } catch (IgniteInterruptedCheckedException e) {
+                                e.printStackTrace();
+                            }
+
+                                return true;
+
+
+                        }
+                    });
+
             boolean flag = true;
             while(flag){
                 if(ignite.cluster().forAttribute("role","master").nodes().size() == numberOfMastersExpected){
                     mastersMessanger.send(RESOURCE_MONITOR, "START");
-                    flag = false;
+                    //flag = false;
+                    try {
+                        sleep(10000);
+                    } catch (IgniteInterruptedCheckedException e) {
+                        e.printStackTrace();
+                    }
                 }
             }
+
 
 
         }

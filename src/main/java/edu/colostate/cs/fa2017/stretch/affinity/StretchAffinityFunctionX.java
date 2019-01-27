@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -33,9 +32,7 @@ import org.apache.ignite.cache.affinity.AffinityFunctionContext;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.internal.processors.cache.GridCacheUtils;
-import org.apache.ignite.internal.util.typedef.F;
 import org.apache.ignite.internal.util.typedef.internal.A;
-import org.apache.ignite.internal.util.typedef.internal.LT;
 import org.apache.ignite.internal.util.typedef.internal.S;
 import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteBiPredicate;
@@ -65,7 +62,7 @@ import org.jetbrains.annotations.Nullable;
  * <p>
  * Cache affinity can be configured for individual caches via {@link CacheConfiguration#getAffinity()} method.
  */
-public class RendezvousAffinityFunction implements AffinityFunction, Serializable {
+public class StretchAffinityFunctionX implements AffinityFunction, Serializable {
     /** */
     private static final long serialVersionUID = 0L;
 
@@ -102,7 +99,7 @@ public class RendezvousAffinityFunction implements AffinityFunction, Serializabl
     /**
      * Empty constructor with all defaults.
      */
-    public RendezvousAffinityFunction() {
+    public StretchAffinityFunctionX() {
         this(false);
     }
 
@@ -115,7 +112,7 @@ public class RendezvousAffinityFunction implements AffinityFunction, Serializabl
      * @param exclNeighbors {@code True} if nodes residing on the same host may not act as backups
      *      of each other.
      */
-    public RendezvousAffinityFunction(boolean exclNeighbors) {
+    public StretchAffinityFunctionX(boolean exclNeighbors) {
         this(exclNeighbors, DFLT_PARTITION_COUNT);
     }
 
@@ -129,7 +126,7 @@ public class RendezvousAffinityFunction implements AffinityFunction, Serializabl
      *      of each other.
      * @param parts Total number of partitions.
      */
-    public RendezvousAffinityFunction(boolean exclNeighbors, int parts) {
+    public StretchAffinityFunctionX(boolean exclNeighbors, int parts) {
         this(exclNeighbors, parts, null);
     }
 
@@ -145,7 +142,7 @@ public class RendezvousAffinityFunction implements AffinityFunction, Serializabl
      * <p>
      * Note that {@code backupFilter} is ignored if {@code excludeNeighbors} is set to {@code true}.
      */
-    public RendezvousAffinityFunction(int parts, @Nullable IgniteBiPredicate<ClusterNode, ClusterNode> backupFilter) {
+    public StretchAffinityFunctionX(int parts, @Nullable IgniteBiPredicate<ClusterNode, ClusterNode> backupFilter) {
         this(false, parts, backupFilter);
     }
 
@@ -156,8 +153,8 @@ public class RendezvousAffinityFunction implements AffinityFunction, Serializabl
      * @param parts Partitions count.
      * @param backupFilter Backup filter.
      */
-    private RendezvousAffinityFunction(boolean exclNeighbors, int parts,
-                                       IgniteBiPredicate<ClusterNode, ClusterNode> backupFilter) {
+    private StretchAffinityFunctionX(boolean exclNeighbors, int parts,
+                                     IgniteBiPredicate<ClusterNode, ClusterNode> backupFilter) {
         A.ensure(parts > 0, "parts > 0");
 
         this.exclNeighbors = exclNeighbors;
@@ -191,7 +188,7 @@ public class RendezvousAffinityFunction implements AffinityFunction, Serializabl
      * @param parts Total number of partitions.
      * @return {@code this} for chaining.
      */
-    public RendezvousAffinityFunction setPartitions(int parts) {
+    public StretchAffinityFunctionX setPartitions(int parts) {
         A.ensure(parts <= CacheConfiguration.MAX_PARTITIONS_COUNT,
                 "parts <= " + CacheConfiguration.MAX_PARTITIONS_COUNT);
         A.ensure(parts > 0, "parts > 0");
@@ -228,7 +225,7 @@ public class RendezvousAffinityFunction implements AffinityFunction, Serializabl
      * @return {@code this} for chaining.
      */
     @Deprecated
-    public RendezvousAffinityFunction setBackupFilter(
+    public StretchAffinityFunctionX setBackupFilter(
             @Nullable IgniteBiPredicate<ClusterNode, ClusterNode> backupFilter) {
         this.backupFilter = backupFilter;
 
@@ -260,7 +257,7 @@ public class RendezvousAffinityFunction implements AffinityFunction, Serializabl
      * @param affinityBackupFilter Optional backup filter.
      * @return {@code this} for chaining.
      */
-    public RendezvousAffinityFunction setAffinityBackupFilter(
+    public StretchAffinityFunctionX setAffinityBackupFilter(
             @Nullable IgniteBiPredicate<ClusterNode, List<ClusterNode>> affinityBackupFilter) {
         this.affinityBackupFilter = affinityBackupFilter;
 
@@ -286,7 +283,7 @@ public class RendezvousAffinityFunction implements AffinityFunction, Serializabl
      * @param exclNeighbors {@code True} if nodes residing on the same host may not act as backups of each other.
      * @return {@code this} for chaining.
      */
-    public RendezvousAffinityFunction setExcludeNeighbors(boolean exclNeighbors) {
+    public StretchAffinityFunctionX setExcludeNeighbors(boolean exclNeighbors) {
         this.exclNeighbors = exclNeighbors;
 
         return this;
@@ -331,7 +328,6 @@ public class RendezvousAffinityFunction implements AffinityFunction, Serializabl
                 index++;
             }
         return lst;
-
     }
 
     /**
@@ -485,9 +481,9 @@ public class RendezvousAffinityFunction implements AffinityFunction, Serializabl
 
             System.out.println("ENtering partiton movement!");
             //Hotspot info coming via config xml
-            String hotspot_partitions = newlyJoinedNode.attribute("hotspot_partitions"); //separated by commas
+            String hotspot_partitions = newlyJoinedNode.attribute("hotspot-partitions"); //separated by commas
             partitionsToMove = hotspot_partitions.split(",");
-            for (int k = 0; k < partitionsToMove.length; k++) {
+            for (int k = 0; k < partitionsToMove.length-1; k++) {
                 System.out.println("The donation made: " + partitionsToMove[k]);
             }
         }
@@ -495,7 +491,7 @@ public class RendezvousAffinityFunction implements AffinityFunction, Serializabl
         boolean flag = donated.equals("yes");
         int j = 0;
         for (int i = 0; i < parts; i++) {
-            if (flag && j < partitionsToMove.length) {
+            if (flag && j < partitionsToMove.length-1) {
                     if (i == Integer.parseInt(partitionsToMove[j])) {
                         List<ClusterNode> partAssignment = newList;
                         j++;
@@ -513,8 +509,6 @@ public class RendezvousAffinityFunction implements AffinityFunction, Serializabl
                 List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups(), neighborhoodCache);
                 assignments.add(partAssignment);
             }
-
-
         }
 
         return assignments;
@@ -620,6 +614,6 @@ public class RendezvousAffinityFunction implements AffinityFunction, Serializabl
 
     /** {@inheritDoc} */
     @Override public String toString() {
-        return S.toString(RendezvousAffinityFunction.class, this);
+        return S.toString(StretchAffinityFunctionX.class, this);
     }
 }

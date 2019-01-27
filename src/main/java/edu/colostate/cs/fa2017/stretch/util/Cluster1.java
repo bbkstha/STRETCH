@@ -8,5 +8,8 @@ public class Cluster1 {
     public static void main (String[] args){
         Ignite ignite = Ignition.start("./config/util/Cluster1.xml");
 
+
+
+
     }
 }

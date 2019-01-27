@@ -1,6 +1,5 @@
 package edu.colostate.cs.fa2017.stretch.groups.B;
 
-import examples.ResourceRequest;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteMessaging;
 import org.apache.ignite.Ignition;
@@ -132,8 +131,8 @@ public class MasterB {
             return true; // Return true to continue listening.
         });
 
-        ResourceRequest resourceRequest = new ResourceRequest(groupMastersMessage, metrics);
-        Thread t = new Thread(resourceRequest);
+//        ResourceRequest resourceRequest = new ResourceRequest(groupMastersMessage, metrics);
+//        Thread t = new Thread(resourceRequest);
         //t.start();
 
 

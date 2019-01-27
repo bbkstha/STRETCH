@@ -2,7 +2,6 @@ package edu.colostate.cs.fa2017.stretch.groups.X;
 
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunction;
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionX;
-import edu.colostate.cs.fa2017.stretch.util.FileEditor;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteMessaging;
 import org.apache.ignite.Ignition;
@@ -18,17 +17,11 @@ import org.apache.ignite.lang.IgniteBiPredicate;
 
 import java.util.*;
 
-public class ClusterMaster {
+public class ClusterMasterY {
 
     private static final String cacheName = "STRETCH-CACHE";
 
     private static final String configTemplate = "./config/group/X/ClusterWorker.xml";
-
-    private static final String RESOURCE_MONITOR = "Resource_Monitor";
-    private static final String REQUEST_TOPIC = "Resource_Requested";
-    private static final String OFFER_TOPIC = "Resource_Offered";
-    private static final String OFFER_ACKNOWLEDGED = "Resource_Acknowledged";
-    private static final String OFFER_GRANTED = "Resource_Granted";
 
     public static void main(String[] args){
 
@@ -48,6 +41,7 @@ public class ClusterMaster {
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.ASYNC);
 
 
+
         // Changing total RAM size to be used by Ignite Node.
         DataStorageConfiguration storageCfg = new DataStorageConfiguration();
         DataRegionConfiguration regionCfg = new DataRegionConfiguration();
@@ -56,7 +50,7 @@ public class ClusterMaster {
         // Setting the size of the default memory region to 80MB to achieve this.
         regionCfg.setInitialSize(
                 10L * 1024 * 1024);
-        regionCfg.setMaxSize(80L * 1024 * 1024);
+        regionCfg.setMaxSize(800L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
@@ -69,16 +63,24 @@ public class ClusterMaster {
 
 
 
+
+
+
+
+
+
         Map<String, String> userAtt = new HashMap<String, String>() {{
             put("group",groupName);
             put("role", "master");
+            put("donated","no");
+
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setUserAttributes(userAtt);
         igniteConfiguration.setClientMode(false);
 
         // Start Ignite node.
-        try (Ignite ignite = Ignition.start(igniteConfiguration)) {
+        Ignite ignite = Ignition.start(igniteConfiguration);
 
             ClusterGroup masterGroup = ignite.cluster().forAttribute("role", "master");
 
@@ -86,6 +88,7 @@ public class ClusterMaster {
             Map<UUID, Object> offerReceived = new HashMap<>();
 
 
+/*
             //All other listeners here!!
 
             //4.Listen for offer grant
@@ -211,16 +214,7 @@ public class ClusterMaster {
                     return true;
                 }
             });
+*/
 
-            boolean flag = true;
-            while(flag){
-                if(ignite.cluster().forAttribute("role","master").nodes().size() == numberOfMastersExpected){
-                    mastersMessanger.send(RESOURCE_MONITOR, "START");
-                    flag = false;
-                }
-            }
-
-
-        }
     }
 }
