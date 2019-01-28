@@ -1,6 +1,5 @@
 package edu.colostate.cs.fa2017.stretch.groups.X;
 
-import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunction;
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionX;
 import edu.colostate.cs.fa2017.stretch.util.FileEditor;
 import org.apache.ignite.Ignite;
@@ -19,11 +18,9 @@ import org.apache.ignite.configuration.IgniteConfiguration;
 import org.apache.ignite.internal.IgniteInterruptedCheckedException;
 import org.apache.ignite.lang.IgniteBiPredicate;
 import org.apache.ignite.lang.IgniteClosure;
-import org.eclipse.jetty.io.ssl.SslClientConnectionFactory;
 
 import java.util.*;
 
-import static org.apache.ignite.internal.util.IgniteUtils.fl;
 import static org.apache.ignite.internal.util.IgniteUtils.sleep;
 
 public class ClusterMasterX {
@@ -266,11 +263,12 @@ public class ClusterMasterX {
 
                                 //System.out.println("The size of the subCluster is: " + clusterGroup.nodes().size());
                                 for (ClusterNode c : clusterGroup.nodes()) {
-                                    /*System.out.println("The nonHeapMemeory initialized (MB): "+c.metrics().getNonHeapMemoryInitialized()/(1024*1024));
+                                    System.out.println("The nonHeapMemeory initialized (MB): "+c.metrics().getNonHeapMemoryInitialized()/(1024*1024));
                                     System.out.println("The nonHeapMemeory max (MB): "+c.metrics().getNonHeapMemoryMaximum()/(1024*1024));
                                     System.out.println("The nonHeapMemeory committed (MB): "+c.metrics().getNonHeapMemoryCommitted()/(1024*1024));
                                     System.out.println("The nonHeapMemeory used (MB): "+c.metrics().getNonHeapMemoryUsed()/(1024*1024));
-                                    System.out.println("The nonHeapMemeory total (MB): "+c.metrics().getNonHeapMemoryTotal()/(1024*1024));*/
+                                    System.out.println("The nonHeapMemeory total (MB): "+c.metrics().getNonHeapMemoryTotal()/(1024*1024));
+
                                 }
 
 

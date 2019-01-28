@@ -8,6 +8,8 @@ import org.apache.ignite.Ignition;
 import org.apache.ignite.cache.CacheMode;
 import org.apache.ignite.cache.CacheRebalanceMode;
 import org.apache.ignite.cache.affinity.AffinityKeyMapped;
+import org.apache.ignite.cluster.ClusterMetrics;
+import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.DataRegionConfiguration;
 import org.apache.ignite.configuration.DataStorageConfiguration;
@@ -41,7 +43,7 @@ public class DataLoader {
         // Setting the size of the default memory region to 80MB to achieve this.
         regionCfg.setInitialSize(
                 10L * 1024 * 1024);
-        regionCfg.setMaxSize(100L * 1024 * 1024);
+        regionCfg.setMaxSize(200L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
@@ -60,7 +62,7 @@ public class DataLoader {
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setUserAttributes(userAtt);
-        igniteConfiguration.setClientMode(true);
+        igniteConfiguration.setClientMode(false);
 
         // Start Ignite node.
         Ignite ignite = Ignition.start(igniteConfiguration);
@@ -80,7 +82,7 @@ public class DataLoader {
             int counter = 0;
             GeoHashUtils geoHashUtils = new GeoHashUtils();
 
-
+        ClusterMetrics nodeMetrics = ignite.cluster().localNode().metrics();
 
         for (File file : listOfFiles) {
                 InputStream inputStream = new FileInputStream(file.getPath());
@@ -100,6 +102,26 @@ public class DataLoader {
 
                         System.out.println("The geohash is: "+geoEntry.geoHash);
                         cache.put(geoEntry, strLine);
+
+                        nodeMetrics.getNonHeapMemoryCommitted();
+                        nodeMetrics.getNonHeapMemoryMaximum();
+                        nodeMetrics.getNonHeapMemoryInitialized();
+                        nodeMetrics.getNonHeapMemoryUsed();
+                        nodeMetrics.getNonHeapMemoryTotal();
+                        nodeMetrics.getCurrentActiveJobs();
+                        nodeMetrics.getAverageCpuLoad();
+                        nodeMetrics.getHeapMemoryUsed();
+                        nodeMetrics.getCurrentCpuLoad();
+                        nodeMetrics.getAverageActiveJobs();
+                        nodeMetrics.getCurrentGcCpuLoad();
+                        nodeMetrics.getHeapMemoryCommitted();
+                        nodeMetrics.getHeapMemoryInitialized();
+                        nodeMetrics.getHeapMemoryMaximum();
+
+
+
+
+
                     }
                 }
             }
