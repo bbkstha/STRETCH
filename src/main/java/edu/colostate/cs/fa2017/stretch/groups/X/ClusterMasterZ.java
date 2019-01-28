@@ -36,7 +36,7 @@ public class ClusterMasterZ {
         cacheConfiguration.setName(cacheName);
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionX stretchAffinityFunctionX = new StretchAffinityFunctionX(false, 10240);
+        StretchAffinityFunctionX stretchAffinityFunctionX = new StretchAffinityFunctionX(false, 1024);
         cacheConfiguration.setAffinity(stretchAffinityFunctionX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.ASYNC);
 
@@ -47,11 +47,11 @@ public class ClusterMasterZ {
         DataStorageConfiguration storageCfg = new DataStorageConfiguration();
         DataRegionConfiguration regionCfg = new DataRegionConfiguration();
         // Region name.
-        regionCfg.setName("80MB_Region");
-        // Setting the size of the default memory region to 80MB to achieve this.
+        regionCfg.setName("100MB_Region");
+        // Setting the size of the default memory region to 100MB to achieve this.
         regionCfg.setInitialSize(
-                10L * 1024 * 1024);
-        regionCfg.setMaxSize(40L * 1024 * 1024);
+                100L * 1024 * 1024);
+        regionCfg.setMaxSize(100L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
@@ -74,6 +74,7 @@ public class ClusterMasterZ {
         Map<String, String> userAtt = new HashMap<String, String>() {{
             put("group",groupName);
             put("role", "master");
+            put("donated","no");
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setUserAttributes(userAtt);

@@ -11,6 +11,7 @@ import java.util.*;
 public class RestartRemoteNode {
 
 
+
     public static void main(String[] args){
 
         IgniteConfiguration cfg = new IgniteConfiguration();

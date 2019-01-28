@@ -21,8 +21,6 @@ public class ClusterMasterY {
 
     private static final String cacheName = "STRETCH-CACHE";
 
-    private static final String configTemplate = "./config/group/X/ClusterWorker.xml";
-
     public static void main(String[] args){
 
         if(args.length<2){
@@ -36,7 +34,7 @@ public class ClusterMasterY {
         cacheConfiguration.setName(cacheName);
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionX stretchAffinityFunctionX = new StretchAffinityFunctionX(false, 10240);
+        StretchAffinityFunctionX stretchAffinityFunctionX = new StretchAffinityFunctionX(false, 1024);
         cacheConfiguration.setAffinity(stretchAffinityFunctionX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.ASYNC);
 
@@ -46,11 +44,11 @@ public class ClusterMasterY {
         DataStorageConfiguration storageCfg = new DataStorageConfiguration();
         DataRegionConfiguration regionCfg = new DataRegionConfiguration();
         // Region name.
-        regionCfg.setName("80MB_Region");
+        regionCfg.setName("100MB_Region");
         // Setting the size of the default memory region to 80MB to achieve this.
         regionCfg.setInitialSize(
-                10L * 1024 * 1024);
-        regionCfg.setMaxSize(800L * 1024 * 1024);
+                100L * 1024 * 1024);
+        regionCfg.setMaxSize(180L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);

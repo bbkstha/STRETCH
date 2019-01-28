@@ -312,21 +312,27 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
                                              List<ClusterNode> nodes,
                                              int backups,
                                              @Nullable Map<UUID, Collection<ClusterNode>> neighborhoodCache) {
-        if (nodes.size() <= 1)
+        if (nodes.size() == 1)
             return nodes;
 
         List<ClusterNode> lst = new ArrayList<>();
         int partitionsPerNode = parts / nodes.size();
+        //System.out.println("The size of nodes: "+nodes.size()+" and partitionsPerNode: "+partitionsPerNode);
         int index = 0;
         while (index < nodes.size()) {
+
+            //System.out.println("The index size is: "+index + "and the parts is: "+part);
             if (part >= index * partitionsPerNode && part < (index + 1) * partitionsPerNode) {
 
+                //System.out.println("Entered!");
                     lst.add(nodes.get(index));
-                    System.out.println("The node for partition id: " + part + " is: " + lst.get(index));
                     break;
                 }
+            else{
                 index++;
+                //System.out.println("Increasing index size: "+index);
             }
+        }
         return lst;
     }
 
@@ -393,13 +399,20 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
             throw new IllegalArgumentException("Null key is passed for a partition calculation. " +
                     "Make sure that an affinity key that is used is initialized properly.");
 
-        if (mask >= 0) {
-            int h;
+//        if (mask >= 0) {
+//            int h;
+//
+//            return ((h = key.hashCode()) ^ (h >>> 16)) & mask;
+//        }
 
-            return ((h = key.hashCode()) ^ (h >>> 16)) & mask;
-        }
 
-        return U.safeAbs(key.hashCode() % parts);
+        int tmpHash = key.hashCode();
+        int hash = tmpHash < 0 ? tmpHash * -1 : tmpHash;
+
+        System.out.println("The key is: "+key+ "and the corresponding destination partition is: "+hash % parts);
+
+
+        return U.safeAbs(hash % parts);
     }
 
     /** {@inheritDoc} */
@@ -483,7 +496,9 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
             //Hotspot info coming via config xml
             String hotspot_partitions = newlyJoinedNode.attribute("hotspot-partitions"); //separated by commas
             partitionsToMove = hotspot_partitions.split(",");
-            for (int k = 0; k < partitionsToMove.length-1; k++) {
+
+            System.out.println("LEN: "+partitionsToMove.length);
+            for (int k = 0; k < partitionsToMove.length; k++) {
                 System.out.println("The donation made: " + partitionsToMove[k]);
             }
         }
@@ -491,7 +506,7 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
         boolean flag = donated.equals("yes");
         int j = 0;
         for (int i = 0; i < parts; i++) {
-            if (flag && j < partitionsToMove.length-1) {
+            if (flag && j < partitionsToMove.length) {
                     if (i == Integer.parseInt(partitionsToMove[j])) {
                         List<ClusterNode> partAssignment = newList;
                         j++;

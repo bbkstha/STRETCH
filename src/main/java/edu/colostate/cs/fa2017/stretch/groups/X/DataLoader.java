@@ -1,6 +1,7 @@
 package edu.colostate.cs.fa2017.stretch.groups.X;
 
 import ch.hsr.geohash.GeoHash;
+import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionX;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteCache;
 import org.apache.ignite.Ignition;
@@ -20,23 +21,27 @@ public class DataLoader {
 
     private static final String cacheName = "STRETCH-CACHE";
 
-    public static void main(String[] args){
+    public static void main(String[] args) throws IOException {
 
         IgniteConfiguration igniteConfiguration = new IgniteConfiguration();
 
         CacheConfiguration cacheConfiguration = new CacheConfiguration();
         cacheConfiguration.setName(cacheName);
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
+
+        StretchAffinityFunctionX stretchAffinityFunctionX = new StretchAffinityFunctionX(false, 1024);
+        cacheConfiguration.setAffinity(stretchAffinityFunctionX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.ASYNC);
+
         // Changing total RAM size to be used by Ignite Node.
         DataStorageConfiguration storageCfg = new DataStorageConfiguration();
         DataRegionConfiguration regionCfg = new DataRegionConfiguration();
         // Region name.
-        regionCfg.setName("80MB_Region");
+        regionCfg.setName("100MB_Region");
         // Setting the size of the default memory region to 80MB to achieve this.
         regionCfg.setInitialSize(
                 10L * 1024 * 1024);
-        regionCfg.setMaxSize(80L * 1024 * 1024);
+        regionCfg.setMaxSize(100L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
@@ -50,13 +55,16 @@ public class DataLoader {
         Map<String, String> userAtt = new HashMap<String, String>() {{
             put("group","client");
             put("role", "loader");
+            put("donated","no");
+
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setUserAttributes(userAtt);
         igniteConfiguration.setClientMode(true);
 
         // Start Ignite node.
-        try (Ignite ignite = Ignition.start(igniteConfiguration)) {
+        Ignite ignite = Ignition.start(igniteConfiguration);
+
 
             IgniteCache<GeoEntry, String> cache = ignite.getOrCreateCache(cacheName);
 
@@ -69,26 +77,34 @@ public class DataLoader {
             File[] listOfFiles = folder.listFiles();
             String strLine;
             BufferedReader bufferReader = null;
-            for (File file : listOfFiles) {
+            int counter = 0;
+            GeoHashUtils geoHashUtils = new GeoHashUtils();
+
+
+
+        for (File file : listOfFiles) {
                 InputStream inputStream = new FileInputStream(file.getPath());
                 InputStreamReader streamReader = new InputStreamReader(inputStream);
                 BufferedReader br = new BufferedReader(streamReader);
                 //Read File Line By Line
+
                 while (( strLine= br.readLine()) != null) {
                     if (!strLine.startsWith("LAT")) {
 
-                        String lat = strLine.split(",")[0];
-                        String lon = strLine.split(",")[1];
-                        GeoEntry geoEntry = new GeoEntry(lat, lon, 8);
+                        counter++;
+                        double lat = Double.parseDouble(strLine.split(",")[0]);
+                        double lon = Double.parseDouble(strLine.split(",")[1]);
+                        String timestamp = strLine.split(",")[2];
+
+                        GeoEntry geoEntry = new GeoEntry(lat, lon, 3, timestamp);
+
+                        System.out.println("The geohash is: "+geoEntry.geoHash);
                         cache.put(geoEntry, strLine);
                     }
                 }
             }
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+
+        System.out.println("The value of counter is: "+counter);
     }
 
     public static class GeoEntry implements Serializable {
@@ -98,11 +114,15 @@ public class DataLoader {
         @AffinityKeyMapped
         private String subGeoHash;
 
-        private GeoEntry(String lat, String lon, int upperRange) {
+        private String timestamp;
 
-            this.geoHash = GeoHash.withCharacterPrecision(Double.parseDouble(lat), -Double.parseDouble(lon), 12).toBase32();
+        private GeoEntry(){}
+
+        private GeoEntry( double lat, double lon, int upperRange, String timestamp) {
+
+            this.geoHash = GeoHash.withCharacterPrecision(lat,lon, 12).toBase32();
             this.subGeoHash = this.geoHash.substring(0, upperRange);
-
+            this.timestamp = timestamp;
         }
 
         private String getGeoHash() {
