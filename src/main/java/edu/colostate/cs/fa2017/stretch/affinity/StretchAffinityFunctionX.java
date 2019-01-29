@@ -409,7 +409,7 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
         int tmpHash = key.hashCode();
         int hash = tmpHash < 0 ? tmpHash * -1 : tmpHash;
 
-        System.out.println("The key is: "+key+ "and the corresponding destination partition is: "+hash % parts);
+        //System.out.println("The key is: "+key+ "and the corresponding destination partition is: "+hash % parts);
 
 
         return U.safeAbs(hash % parts);
