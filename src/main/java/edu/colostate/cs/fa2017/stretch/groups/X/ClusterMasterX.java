@@ -2,6 +2,7 @@ package edu.colostate.cs.fa2017.stretch.groups.X;
 
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionX;
 import edu.colostate.cs.fa2017.stretch.util.FileEditor;
+import org.apache.ignite.DataRegionMetrics;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteMessaging;
 import org.apache.ignite.Ignition;
@@ -254,45 +255,42 @@ public class ClusterMasterX {
                         @Override
                         public boolean apply(UUID nodeId, Object msg) {
 
+                            while(!alreadyRequested) {
+
 
 
                                 String groupName = ignite.cluster().localNode().attribute("group");
                                 ClusterGroup clusterGroup = ignite.cluster().forAttribute("group", groupName);
+                                Map<Double, UUID> offheapUsage = new TreeMap<>();
+                                Map<Double, UUID> cpuUsage = new TreeMap<>();
 
-                               // System.out.println("---------------------------------------------------------------------------------------------");
-
-                                //System.out.println("The size of the subCluster is: " + clusterGroup.nodes().size());
                                 for (ClusterNode c : clusterGroup.nodes()) {
-                                    System.out.println("The nonHeapMemeory initialized (MB): "+c.metrics().getNonHeapMemoryInitialized()/(1024*1024));
-                                    System.out.println("The nonHeapMemeory max (MB): "+c.metrics().getNonHeapMemoryMaximum()/(1024*1024));
-                                    System.out.println("The nonHeapMemeory committed (MB): "+c.metrics().getNonHeapMemoryCommitted()/(1024*1024));
-                                    System.out.println("The nonHeapMemeory used (MB): "+c.metrics().getNonHeapMemoryUsed()/(1024*1024));
-                                    System.out.println("The nonHeapMemeory total (MB): "+c.metrics().getNonHeapMemoryTotal()/(1024*1024));
+                                    String remoteDataRegionMetrics = ignite.compute(ignite.cluster().forNode(c)).apply(
+                                        new IgniteClosure<Integer, String>() {
+                                                @Override
+                                                public String apply(Integer x) {
 
+                                                    DataRegionMetrics dM = ignite.dataRegionMetrics("default");
+                                                    ClusterMetrics metrics = ignite.cluster().localNode().metrics();
+                                                    String stat = ""+(dM.getPhysicalMemoryPages() * 4 / (double) 1024) + ", "
+                                                            + metrics.getCurrentCpuLoad();
+                                                    return stat;
+                                                }
+                                            },
+                                            1
+                                    );
+
+                                    double usage = Double.parseDouble(remoteDataRegionMetrics.split(",")[0]) /(regionCfg.getMaxSize()/(double)(1024*1024));
+                                    double cpu = Double.parseDouble(remoteDataRegionMetrics.split(",")[2]);
+
+                                    offheapUsage.put(usage, c.id());
+                                    cpuUsage.put(cpu, c.id());
                                 }
 
 
-                                ClusterMetrics clusterMetrics = clusterGroup.metrics();
 
-                                long startTimeMills = clusterMetrics.getStartTime();
-                                long committedMemory = clusterMetrics.getNonHeapMemoryCommitted();
-                                long usedMemory = clusterMetrics.getNonHeapMemoryUsed();
-                                //System.out.println("UsedMemory: " + usedMemory + " and AllocatedMemory: " + committedMemory);
-                                long currentTimeMillis = System.currentTimeMillis();
 
-                                double usage = usedMemory * (100 / (double) committedMemory); //usage percentage (Bytes)
-                                double usageRate = usedMemory * 1000 / (currentTimeMillis - startTimeMills); //usage per second
-                                double standardUsage = 4768371582.03; //50MB per second
-                                //System.out.println("For Cluster: " + groupName);
-                                //System.out.println("Usage: " + usage + " and usageRage: " + usageRate);
 
-                                Long ig = ignite.cache(cacheName).localSizeLong(43, CachePeekMode.PRIMARY);
-                                //System.out.println("The size of partition 43 is: "+ig);
-
-                                if (ig > 400 ) {
-                                    while(!alreadyRequested) {
-
-                                        Map<Double, ClusterNode> nodeToUsage = new TreeMap<>();
                                         Collection<ClusterNode> nodes = clusterGroup.nodes();
                                         Iterator<ClusterNode> iterator = nodes.iterator();
                                         while (iterator.hasNext()) {
@@ -300,12 +298,12 @@ public class ClusterMasterX {
                                             double localUsage = n.metrics().getNonHeapMemoryUsed() / (double) n.metrics().getNonHeapMemoryCommitted();
                                             boolean flag = true;
                                             while (flag) {
-                                                if (!nodeToUsage.containsKey(localUsage)) {
+                                                /*if (!nodeToUsage.containsKey(localUsage)) {
                                                     nodeToUsage.put(localUsage, n);
                                                     flag = false;
                                                 } else {
                                                     localUsage += 0.001;
-                                                }
+                                                }*/
                                             }
                                         }
 
@@ -359,14 +357,8 @@ public class ClusterMasterX {
 
                                         mastersMessanger.send(REQUEST_TOPIC, (Object) hotspotPartitions);
                                         alreadyRequested = true;
-                                    }
                             }
-
-
-
-                                return true;
-
-
+                            return true;
                         }
                     });
 

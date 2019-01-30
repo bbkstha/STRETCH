@@ -2,14 +2,13 @@ package edu.colostate.cs.fa2017.stretch.groups.X;
 
 import ch.hsr.geohash.GeoHash;
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionX;
-import org.apache.ignite.DataRegionMetrics;
-import org.apache.ignite.Ignite;
-import org.apache.ignite.IgniteCache;
-import org.apache.ignite.Ignition;
+import org.apache.ignite.*;
 import org.apache.ignite.cache.CacheMetrics;
 import org.apache.ignite.cache.CacheMode;
+import org.apache.ignite.cache.CachePeekMode;
 import org.apache.ignite.cache.CacheRebalanceMode;
 import org.apache.ignite.cache.affinity.AffinityKeyMapped;
+import org.apache.ignite.cluster.ClusterGroup;
 import org.apache.ignite.cluster.ClusterMetrics;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
@@ -18,13 +17,12 @@ import org.apache.ignite.configuration.DataStorageConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
 import org.apache.ignite.internal.ClusterLocalNodeMetricsMXBeanImpl;
 import org.apache.ignite.internal.processors.cache.persistence.DataRegionMetricsSnapshot;
+import org.apache.ignite.lang.IgniteClosure;
 import org.apache.ignite.mxbean.DataRegionMetricsMXBean;
 
 import javax.xml.crypto.Data;
 import java.io.*;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class DataLoader {
 
@@ -36,13 +34,14 @@ public class DataLoader {
 
         IgniteConfiguration igniteConfiguration = new IgniteConfiguration();
 
-        igniteConfiguration.setMetricsUpdateFrequency(1000);
-        igniteConfiguration.setMetricsLogFrequency(5000);
+        igniteConfiguration.setMetricsUpdateFrequency(2000);
+        igniteConfiguration.setMetricsLogFrequency(60000);
 
 
         // Changing total RAM size to be used by Ignite Node.
         DataStorageConfiguration storageCfg = new DataStorageConfiguration();
-        DataRegionConfiguration regionCfg = new DataRegionConfiguration();
+
+ /*       DataRegionConfiguration regionCfg = new DataRegionConfiguration();
 
         regionCfg.setMetricsEnabled(true);
 
@@ -54,7 +53,7 @@ public class DataLoader {
         regionCfg.setMaxSize(300L * 1024 * 1024);
 
         // Enable persistence for the region.
-        regionCfg.setPersistenceEnabled(false);
+        regionCfg.setPersistenceEnabled(false);*/
 
 
         // Setting the size of the default memory region to 4GB to achieve this.
@@ -67,7 +66,7 @@ public class DataLoader {
         storageCfg.setMetricsEnabled(true);
 
         // Setting the data region configuration.
-        storageCfg.setDefaultDataRegionConfiguration(regionCfg);
+        //storageCfg.setDefaultDataRegionConfiguration(regionCfg);
         // Applying the new configuration.
         igniteConfiguration.setDataStorageConfiguration(storageCfg);
 
@@ -138,30 +137,88 @@ public class DataLoader {
                         double lon = Double.parseDouble(strLine.split(",")[1]);
                         String timestamp = strLine.split(",")[2];
 
-                        GeoEntry geoEntry = new GeoEntry(lat, lon, 3, timestamp);
+                        GeoEntry geoEntry = new GeoEntry(lat, lon, 5, timestamp);
 
                         //System.out.println("The geohash is: "+geoEntry.geoHash);
                         cache.put(geoEntry, strLine);
 
 
-                        if(counter== 250 || counter== 2500 || counter== 25000 || counter==294000) {
+                        if(counter == 184000  || counter==294000) {
 
-                            DataRegionMetrics dataRegionMetrics = ignite.dataRegionMetrics("300MB_Region");
+                            DataRegionMetrics dataRegionMetrics = ignite.dataRegionMetrics("default");
+
+
                             ClusterMetrics metrics = ignite.cluster().localNode().metrics();
+                            //Remote node data region metrics using ignite.compute
+
+                            Collection<ClusterNode> remoteNode = ignite.cluster().nodes();
+                            Iterator<ClusterNode> it = remoteNode.iterator();
+                            while(it.hasNext()) {
+
+                                String remoteDataRegionMetrics = ignite.compute(ignite.cluster().forNode(it.next())).apply(
+
+                                        new IgniteClosure<Integer, String>() {
+                                            @Override
+                                            public String apply(Integer x) {
+
+                                                System.out.println("Inside hotspot node!");
+                                                DataRegionMetrics dM = ignite.dataRegionMetrics("default");
+                                                ClusterMetrics metrics = ignite.cluster().localNode().metrics();
+
+                                            /*try {
+                                                Thread.sleep(2000);
+                                            } catch (InterruptedException e) {
+                                                e.printStackTrace();
+                                            }
+*/
+                                                String stat = "" + ignite.cluster().localNode().id() + "," + (dM.getPhysicalMemoryPages() * 4 / (double) 1024) + ", " + metrics.getCurrentCpuLoad();
+                                                System.out.println(stat);
+                                                System.out.println("-----------------------------");
+                                                return stat;
+                                            }
+                                        },
+                                        1
+                                );
+                                System.out.println("Remote total used: " + remoteDataRegionMetrics.split(",")[1]);
+                                System.out.println("Remote cpu: " + remoteDataRegionMetrics.split(",")[2]);
+                                System.out.println("______________________________________________________________");
+
+                            }
+
                             //Thread.sleep(2000);
-                            System.out.println("MB getTotalAllocatedPages: " + dataRegionMetrics.getTotalAllocatedPages());
-                            System.out.println("MB getPhysicalMemoryPages: " + dataRegionMetrics.getPhysicalMemoryPages());
-                            System.out.println("MB total used: " + dataRegionMetrics.getPhysicalMemoryPages() * 4 / ( 1024));
-                            System.out.println("MB total allocated: " + regionCfg.getMaxSize() / ( 1024 * 1024));
 
-                            System.out.println("MB total usage %: " + (dataRegionMetrics.getPhysicalMemoryPages() * 4 / ( 1024))/ (double) (regionCfg.getMaxSize() / ( 1024 * 1024)));
+                            //System.out.println("MB getTotalAllocatedPages: " + dataRegionMetrics.getTotalAllocatedPages());
+                            //System.out.println("MB getPhysicalMemoryPages: " + dataRegionMetrics.getPhysicalMemoryPages());
+                            System.out.println("Local total used: " + dataRegionMetrics.getPhysicalMemoryPages() * 4 / (double) 1024);
+                            //System.out.println("MB total allocated: " + 2300.0);
+
+                            //System.out.println("MB total usage %: " + (dataRegionMetrics.getPhysicalMemoryPages() * 4 / ( 1024))/ 2300.0 );
+
+                            System.out.println("Local cpu: " + metrics.getCurrentCpuLoad());
 
 
-                            System.out.println("MB offheapUsed: " + metrics.getNonHeapMemoryUsed());
-                            System.out.println("MB offheapTotal: " + metrics.getNonHeapMemoryTotal());
-                            System.out.println("MB totalNodes: " + metrics.getTotalNodes());
-                            System.out.println("MB cpu: " + metrics.getCurrentCpuLoad());
-                       }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        }
 
 
 

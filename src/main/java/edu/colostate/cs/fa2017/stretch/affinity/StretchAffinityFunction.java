@@ -9,6 +9,7 @@ import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.internal.processors.cache.GridCacheUtils;
 import org.apache.ignite.internal.util.typedef.internal.A;
+import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteBiTuple;
 
 import java.io.Serializable;
@@ -91,6 +92,32 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
         // No-op.
     }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     /** {@inheritDoc} */
     @Override public int partition(Object key) {
         if (key == null)
@@ -98,12 +125,12 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
                     "Make sure that an affinity key that is used is initialized properly.");
 
         //Testing
-        return key.hashCode() % parts;
-/*        //Without considering masters: assuming all nodes as part of whole
+        //return key.hashCode() % parts;
+        //Without considering masters: assuming all nodes as part of whole
         int numberOfNodes = totalNodes;
 
         String part = "";
-        part = part + key.toString().toLowerCase().charAt(added_precision);
+        part = "" + key.toString().toLowerCase().charAt(added_precision);
 
         if (numberOfNodes > 32 && numberOfNodes <= 1024) {
             added_precision++;
@@ -128,7 +155,7 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
             for (int j = 0; j < base32.length; j++) {
                 length--;
-                if (base32[j] == part.charAt(i)) {
+                if (part.charAt(i) == base32[j]) {
 
                     sum += (Math.pow(32, length) * j);
                 }
@@ -157,18 +184,34 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
         int partID = start + key.hashCode() % partitionsPerNode;
 
         System.out.println("The key to partition map: key| " + key + " ==> partition| " + partID);
+//
+//        if(partitionToCount.containsKey(partID)){
+//
+//            partitionToCount.put(partID, partitionToCount.get(partID)+1);
+//        }
+//        else {
+//
+//            partitionToCount.put(partID, (long) 1);
+//        }
 
-        if(partitionToCount.containsKey(partID)){
-
-            partitionToCount.put(partID, partitionToCount.get(partID)+1);
-        }
-        else {
-
-            partitionToCount.put(partID, (long) 1);
-        }
-
-        return U.safeAbs(partID);*/
+        return U.safeAbs(partID);
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     public Long getPartitionToKeyCount(int part){
