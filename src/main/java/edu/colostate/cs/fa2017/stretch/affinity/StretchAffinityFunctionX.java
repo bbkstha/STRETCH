@@ -17,6 +17,7 @@ package edu.colostate.cs.fa2017.stretch.affinity;/*
 
 
 import java.io.Serializable;
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -480,8 +481,13 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
 
         String donated = newlyJoinedNode.attribute("donated");
         List<ClusterNode> newList = new ArrayList<>();
-        newList.add(newlyJoinedNode);
-        String[] partitionsToMove = null;
+        //newList.add(newlyJoinedNode);
+
+
+
+        int[] partitionsToMoveAscending = null;
+
+
         System.out.println("Is the node donated: " + donated);
 
 
@@ -495,24 +501,52 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
             System.out.println("ENtering partiton movement!");
             //Hotspot info coming via config xml
             String hotspot_partitions = newlyJoinedNode.attribute("hotspot-partitions"); //separated by commas
-            partitionsToMove = hotspot_partitions.split(",");
+            String[] partitionsToMove = hotspot_partitions.split(",");
+            System.out.println("Partitions to move: "+hotspot_partitions);
+            System.out.println("Partitons to move: count "+partitionsToMove.length);
 
             System.out.println("LEN: "+partitionsToMove.length);
-            for (int k = 0; k < partitionsToMove.length; k++) {
-                System.out.println("The donation made: " + partitionsToMove[k]);
+
+
+            String idleNodeID = newlyJoinedNode.attribute("idle");
+            System.out.println("The idle node to use: "+idleNodeID);
+
+            for(int k=0; k< nodes.size(); k++){
+                if(nodes.get(k).id().toString().equals(idleNodeID)){
+
+                    System.out.println("Added to newList: "+nodes.get(k).id());
+                    newList.add(nodes.get(k));
+                    break;
+                }
             }
+
+            int[] partitionsToMoveAscending1 = new int[partitionsToMove.length];
+
+            for (int k = 0; k < partitionsToMove.length; k++) {
+                if(!partitionsToMove[k].isEmpty()){
+                    //System.out.println(""+k+". "+partitionsToMove[k].trim());
+                    partitionsToMoveAscending1[k] = Integer.parseInt(partitionsToMove[k].trim());
+                }
+            }
+
+            Arrays.sort(partitionsToMoveAscending1);
+
+            partitionsToMoveAscending = partitionsToMoveAscending1;
+
         }
+
+
+
 
         boolean flag = donated.equals("yes");
         int j = 0;
         for (int i = 0; i < parts; i++) {
-            if (flag && j < partitionsToMove.length) {
-                    if (i == Integer.parseInt(partitionsToMove[j])) {
-                        List<ClusterNode> partAssignment = newList;
-                        j++;
-                        System.out.println("The node for moved partition id: " + i + " is: " + newlyJoinedNode);
-                        assignments.add(partAssignment);
 
+            if (flag && j < partitionsToMoveAscending.length) {
+                    if (i == partitionsToMoveAscending[j]) {
+
+                        j++;
+                        assignments.add(newList);
                     } else {
                         //System.out.println("The node for moved partition id: " + i + " is: " + affCtx.previousAssignment(i));
                         //assignments.add(affCtx.previousAssignment(i));

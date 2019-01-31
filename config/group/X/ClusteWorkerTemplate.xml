@@ -32,6 +32,8 @@
                 <entry key="role" value="worker"/>
                 <entry key="donated" value="_DONATED_"/>
                 <entry key="hotspot-partitions" value="_HOT-PARTITIONS_"/>
+                <entry key="cause" value="_CAUSE_"/>
+                <entry key="idle" value="_IDLE-NODE_"/>
             </map>
         </property>
 

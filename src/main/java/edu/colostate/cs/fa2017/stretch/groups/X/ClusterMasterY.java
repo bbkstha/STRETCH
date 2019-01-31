@@ -20,6 +20,11 @@ import java.util.*;
 public class ClusterMasterY {
 
     private static final String cacheName = "STRETCH-CACHE";
+    private static final String dataRegionName = "150MB_Region";
+
+    private static boolean alreadyRequested = true;
+
+
 
     public static void main(String[] args){
 
@@ -44,11 +49,11 @@ public class ClusterMasterY {
         DataStorageConfiguration storageCfg = new DataStorageConfiguration();
         DataRegionConfiguration regionCfg = new DataRegionConfiguration();
         // Region name.
-        regionCfg.setName("100MB_Region");
+        regionCfg.setName(dataRegionName);
         // Setting the size of the default memory region to 80MB to achieve this.
         regionCfg.setInitialSize(
-                100L * 1024 * 1024);
-        regionCfg.setMaxSize(180L * 1024 * 1024);
+                50L * 1024 * 1024);
+        regionCfg.setMaxSize(400L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
@@ -57,20 +62,11 @@ public class ClusterMasterY {
         // Applying the new configuration.
         igniteConfiguration.setDataStorageConfiguration(storageCfg);
 
-
-
-
-
-
-
-
-
-
-
         Map<String, String> userAtt = new HashMap<String, String>() {{
             put("group",groupName);
             put("role", "master");
             put("donated","no");
+            put("region-max", "400");
 
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);

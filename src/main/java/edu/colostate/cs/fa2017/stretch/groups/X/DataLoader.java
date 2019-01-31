@@ -30,7 +30,7 @@ public class DataLoader {
 
     private static final String outputFileName = "/s/chopin/b/grad/bbkstha/stretch/output.txt";
 
-    public static void main(String[] args) throws IOException, InterruptedException {
+    public static void main(String[] args) throws IOException, InterruptedException, IgniteCheckedException {
 
         IgniteConfiguration igniteConfiguration = new IgniteConfiguration();
 
@@ -78,8 +78,8 @@ public class DataLoader {
 
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        /*StretchAffinityFunctionX stretchAffinityFunctionX = new StretchAffinityFunctionX(false, 1024);
-        cacheConfiguration.setAffinity(stretchAffinityFunctionX);*/
+        StretchAffinityFunctionX stretchAffinityFunctionX = new StretchAffinityFunctionX(false, 1024);
+        cacheConfiguration.setAffinity(stretchAffinityFunctionX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.ASYNC);
         cacheConfiguration.setStatisticsEnabled(true);
         //cacheConfiguration.setDataRegionName("default");
@@ -94,7 +94,7 @@ public class DataLoader {
 
         }};
         igniteConfiguration.setUserAttributes(userAtt);
-        igniteConfiguration.setClientMode(false);
+        igniteConfiguration.setClientMode(true);
 
         // Start Ignite node.
         Ignite ignite = Ignition.start(igniteConfiguration);
@@ -113,6 +113,8 @@ public class DataLoader {
         String strLine;
         BufferedReader bufferReader = null;
         int counter = 0;
+
+        long sum = 0;
         GeoHashUtils geoHashUtils = new GeoHashUtils();
 
         File oldFile = new File(outputFileName);
@@ -142,36 +144,38 @@ public class DataLoader {
                         //System.out.println("The geohash is: "+geoEntry.geoHash);
                         cache.put(geoEntry, strLine);
 
+                        byte[] arr = ignite.configuration().getMarshaller().marshal(new GeoEntry(lat, lon, 5, timestamp));
+                        byte[] arr1 = ignite.configuration().getMarshaller().marshal(new String(strLine));
 
-                        if(counter == 184000  || counter==294000) {
+                        sum += (arr.length + arr1.length);
 
+                        /*if(counter > 0){
+
+                            Thread.sleep(1000);
+
+                        }*/
+
+
+                        /*if(counter == 184000  || counter==294000) {
                             DataRegionMetrics dataRegionMetrics = ignite.dataRegionMetrics("default");
-
-
                             ClusterMetrics metrics = ignite.cluster().localNode().metrics();
                             //Remote node data region metrics using ignite.compute
-
                             Collection<ClusterNode> remoteNode = ignite.cluster().nodes();
                             Iterator<ClusterNode> it = remoteNode.iterator();
                             while(it.hasNext()) {
-
                                 String remoteDataRegionMetrics = ignite.compute(ignite.cluster().forNode(it.next())).apply(
-
                                         new IgniteClosure<Integer, String>() {
                                             @Override
                                             public String apply(Integer x) {
-
                                                 System.out.println("Inside hotspot node!");
                                                 DataRegionMetrics dM = ignite.dataRegionMetrics("default");
                                                 ClusterMetrics metrics = ignite.cluster().localNode().metrics();
-
-                                            /*try {
+                                            *//*try {
                                                 Thread.sleep(2000);
                                             } catch (InterruptedException e) {
                                                 e.printStackTrace();
                                             }
-*/
-                                                String stat = "" + ignite.cluster().localNode().id() + "," + (dM.getPhysicalMemoryPages() * 4 / (double) 1024) + ", " + metrics.getCurrentCpuLoad();
+*//*                                                String stat = "" + ignite.cluster().localNode().id() + "," + (dM.getPhysicalMemoryPages() * 4 / (double) 1024) + ", " + metrics.getCurrentCpuLoad();
                                                 System.out.println(stat);
                                                 System.out.println("-----------------------------");
                                                 return stat;
@@ -182,43 +186,15 @@ public class DataLoader {
                                 System.out.println("Remote total used: " + remoteDataRegionMetrics.split(",")[1]);
                                 System.out.println("Remote cpu: " + remoteDataRegionMetrics.split(",")[2]);
                                 System.out.println("______________________________________________________________");
-
                             }
-
                             //Thread.sleep(2000);
-
                             //System.out.println("MB getTotalAllocatedPages: " + dataRegionMetrics.getTotalAllocatedPages());
                             //System.out.println("MB getPhysicalMemoryPages: " + dataRegionMetrics.getPhysicalMemoryPages());
                             System.out.println("Local total used: " + dataRegionMetrics.getPhysicalMemoryPages() * 4 / (double) 1024);
                             //System.out.println("MB total allocated: " + 2300.0);
-
                             //System.out.println("MB total usage %: " + (dataRegionMetrics.getPhysicalMemoryPages() * 4 / ( 1024))/ 2300.0 );
-
                             System.out.println("Local cpu: " + metrics.getCurrentCpuLoad());
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                        }
+                        }*/
 
 
 
@@ -250,6 +226,7 @@ public class DataLoader {
             }
 
         System.out.println("The value of counter is: "+counter);
+        System.out.println("The sum is: "+sum);
         ClusterMetrics clusterMetrics= ignite.cluster().metrics();
 
 
