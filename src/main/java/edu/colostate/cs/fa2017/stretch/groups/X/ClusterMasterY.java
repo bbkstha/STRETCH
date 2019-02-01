@@ -22,7 +22,8 @@ public class ClusterMasterY {
     private static final String cacheName = "STRETCH-CACHE";
     private static final String dataRegionName = "150MB_Region";
 
-    private static boolean alreadyRequested = true;
+    private static boolean alreadyRequested = false;
+
 
 
 
@@ -41,7 +42,7 @@ public class ClusterMasterY {
 
         StretchAffinityFunctionX stretchAffinityFunctionX = new StretchAffinityFunctionX(false, 1024);
         cacheConfiguration.setAffinity(stretchAffinityFunctionX);
-        cacheConfiguration.setRebalanceMode(CacheRebalanceMode.ASYNC);
+        cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
 
 
 
@@ -53,7 +54,7 @@ public class ClusterMasterY {
         // Setting the size of the default memory region to 80MB to achieve this.
         regionCfg.setInitialSize(
                 50L * 1024 * 1024);
-        regionCfg.setMaxSize(400L * 1024 * 1024);
+        regionCfg.setMaxSize(100L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
@@ -66,12 +67,14 @@ public class ClusterMasterY {
             put("group",groupName);
             put("role", "master");
             put("donated","no");
-            put("region-max", "400");
+            put("region-max", "100");
 
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setUserAttributes(userAtt);
         igniteConfiguration.setClientMode(false);
+        igniteConfiguration.setRebalanceThreadPoolSize(4);
+
 
         // Start Ignite node.
         Ignite ignite = Ignition.start(igniteConfiguration);

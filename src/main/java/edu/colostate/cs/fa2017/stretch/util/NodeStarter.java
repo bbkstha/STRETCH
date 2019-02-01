@@ -27,8 +27,8 @@ public class NodeStarter {
             put("host",hostName);
             put("uname","bbkstha");
             put("passwd","Bibek2753");
-            put("cfg","/s/chopin/b/grad/bbkstha/IdeaProjects/IgniteExamples/config/group/A/Group"+group+".xml");
-            put("nodes",3);
+            put("cfg","/s/chopin/b/grad/bbkstha/IdeaProjects/IgniteExamples/config/group/A/GroupGG.xml");
+            put("nodes",1);
         }};
         hostNames.add(tmpMap);
         Map<String, Object> dflts = null;

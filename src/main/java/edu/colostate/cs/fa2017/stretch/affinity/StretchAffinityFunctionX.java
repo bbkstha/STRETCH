@@ -68,7 +68,7 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
     private static final long serialVersionUID = 0L;
 
     /** Default number of partitions. */
-    public static final int DFLT_PARTITION_COUNT = 1024;
+    public static final int DFLT_PARTITION_COUNT = 10;
 
     /** Comparator. */
     private static final Comparator<IgniteBiTuple<Long, ClusterNode>> COMPARATOR = new HashComparator();
@@ -413,13 +413,15 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
         //System.out.println("The key is: "+key+ "and the corresponding destination partition is: "+hash % parts);
 
 
-        return U.safeAbs(hash % parts);
+        return U.safeAbs(hash % (parts-1));
     }
 
     /** {@inheritDoc} */
     @Override public List<List<ClusterNode>> assignPartitions(AffinityFunctionContext affCtx) {
-
+        System.out.println(parts);
         List<List<ClusterNode>> assignments = new ArrayList<>(parts);
+
+        //String event = affCtx.discoveryEvent().shortDisplay().split(":")[0];
 
         System.out.println("The event is: "+affCtx.discoveryEvent().shortDisplay().split(":")[0]);
 
@@ -466,8 +468,10 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
 
         List<ClusterNode> nodes = affCtx.currentTopologySnapshot();
 
+        System.out.println("#nodes"+nodes.size());
+
         ClusterNode newlyJoinedNode = affCtx.discoveryEvent().eventNode();
-        int index;
+        int index=0;
 
         for(int i=0; i<nodes.size(); i++){
 
@@ -486,7 +490,7 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
 
 
         int[] partitionsToMoveAscending = null;
-
+        String causeOfHotspot = "M";
 
         System.out.println("Is the node donated: " + donated);
 
@@ -509,6 +513,7 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
 
 
             String idleNodeID = newlyJoinedNode.attribute("idle");
+            causeOfHotspot = newlyJoinedNode.attribute("cause");
             System.out.println("The idle node to use: "+idleNodeID);
 
             for(int k=0; k< nodes.size(); k++){
@@ -539,6 +544,7 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
 
 
         boolean flag = donated.equals("yes");
+        System.out.println("flag: "+flag);
         int j = 0;
         for (int i = 0; i < parts; i++) {
 
@@ -546,7 +552,22 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
                     if (i == partitionsToMoveAscending[j]) {
 
                         j++;
-                        assignments.add(newList);
+
+                        if(causeOfHotspot.equalsIgnoreCase("CM")){
+
+                            /*List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups(), neighborhoodCache);
+                            partAssignment.add(newList.get(0));*/
+                            assignments.add(newList);
+
+                        }else if(causeOfHotspot.equalsIgnoreCase("C")){
+                            assignments.add(newList);
+ /*                           List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups(), neighborhoodCache);
+                            partAssignment.add(newList.get(0));
+*/
+                        }else if(causeOfHotspot.equalsIgnoreCase("M")){
+
+                            assignments.add(newList);
+                        }
                     } else {
                         //System.out.println("The node for moved partition id: " + i + " is: " + affCtx.previousAssignment(i));
                         //assignments.add(affCtx.previousAssignment(i));
@@ -555,6 +576,8 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
                     }
             }else{
 
+                System.out.println(" "+i+" Entered partition assignment!");
+                //System.out.println("The size of nodes: "+nodes.size());
                 List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups(), neighborhoodCache);
                 assignments.add(partAssignment);
             }

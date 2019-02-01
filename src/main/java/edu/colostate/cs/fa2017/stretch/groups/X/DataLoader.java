@@ -75,12 +75,13 @@ public class DataLoader {
         cacheConfiguration.setStatisticsEnabled(true);
         cacheConfiguration.setName(cacheName);
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
+        igniteConfiguration.setRebalanceThreadPoolSize(4);
 
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
         StretchAffinityFunctionX stretchAffinityFunctionX = new StretchAffinityFunctionX(false, 1024);
         cacheConfiguration.setAffinity(stretchAffinityFunctionX);
-        cacheConfiguration.setRebalanceMode(CacheRebalanceMode.ASYNC);
+        cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
         cacheConfiguration.setStatisticsEnabled(true);
         //cacheConfiguration.setDataRegionName("default");
 
@@ -119,7 +120,7 @@ public class DataLoader {
 
         File oldFile = new File(outputFileName);
         if(oldFile.isFile()){
-            System.out.println("OLD FILE EXIST");
+            //System.out.println("OLD FILE EXIST");
             oldFile.delete();
         }
 
@@ -139,15 +140,15 @@ public class DataLoader {
                         double lon = Double.parseDouble(strLine.split(",")[1]);
                         String timestamp = strLine.split(",")[2];
 
-                        GeoEntry geoEntry = new GeoEntry(lat, lon, 5, timestamp);
+                        GeoEntry geoEntry = new GeoEntry(lat, lon, 4, timestamp);
 
                         //System.out.println("The geohash is: "+geoEntry.geoHash);
                         cache.put(geoEntry, strLine);
 
-                        byte[] arr = ignite.configuration().getMarshaller().marshal(new GeoEntry(lat, lon, 5, timestamp));
-                        byte[] arr1 = ignite.configuration().getMarshaller().marshal(new String(strLine));
+                        //byte[] arr = ignite.configuration().getMarshaller().marshal(new GeoEntry(lat, lon, 5, timestamp));
+                        //byte[] arr1 = ignite.configuration().getMarshaller().marshal(new String(strLine));
 
-                        sum += (arr.length + arr1.length);
+                        //sum += (arr.length + arr1.length);
 
                         /*if(counter > 0){
 

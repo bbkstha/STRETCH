@@ -9,29 +9,29 @@ public class SortMapUsingValue {
 
 
     public static void main(String[] args) {
-        System.out.println("\nSorting using Java8 streams\n");
+//        System.out.println("\nSorting using Java8 streams\n");
+//
+//        System.out.println((double)(Math.random() % 0.00001));
+//        System.out.println();
+//
+//        String a = " 726,601,527,599,670,720,23,951, ";
+//        String[] b = a.split(",");
+//
+//        System.out.println("The length of b is: "+b.length);
+//        int[] c = new int[b.length];
+//
+//        for (int k = 0; k < b.length; k++) {
+//            c[k] = Integer.parseInt(b[k].trim());
+//        }
+//
+//        Arrays.sort(c);
+//        for (int m = 0; m < c.length; m++) {
+//            System.out.println(c[m]);
+//        }
 
-        System.out.println((double)(Math.random() % 0.00001));
-        System.out.println();
-
-        String a = " 726,601,527,599,670,720,23,951, ";
-        String[] b = a.split(",");
-
-        System.out.println("The length of b is: "+b.length);
-        int[] c = new int[b.length];
-
-        for (int k = 0; k < b.length; k++) {
-            c[k] = Integer.parseInt(b[k].trim());
-        }
-
-        Arrays.sort(c);
-        for (int m = 0; m < c.length; m++) {
-            System.out.println(c[m]);
-        }
 
 
-
-        //sortByValueJava8Stream();
+        sortByValueJava8Stream();
     }
 
     private static void sortByValueJava8Stream()
@@ -51,6 +51,17 @@ public class SortMapUsingValue {
                 .forEachOrdered(x -> reverseSortedMap.put(x.getKey(), x.getValue()));
 
         System.out.println("Reverse Sorted Map   : " + reverseSortedMap);
+
+        for(Map.Entry<String, Integer> e: reverseSortedMap.entrySet()){
+
+            System.out.println(e);
+        }
+
+        System.out.println("Again.");
+        for(Map.Entry<String, Integer> e: reverseSortedMap.entrySet()){
+
+            System.out.println(e);
+        }
     }
 
     private static Map<String, Integer> getUnSortedMap()
@@ -63,6 +74,7 @@ public class SortMapUsingValue {
         unsortMap.put("brian", 4);
         return unsortMap;
     }
+
 
 
 }

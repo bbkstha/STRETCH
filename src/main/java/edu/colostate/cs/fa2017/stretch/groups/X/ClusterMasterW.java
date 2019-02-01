@@ -1,6 +1,5 @@
 package edu.colostate.cs.fa2017.stretch.groups.X;
 
-import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunction;
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionX;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteMessaging;
@@ -8,23 +7,23 @@ import org.apache.ignite.Ignition;
 import org.apache.ignite.cache.CacheMode;
 import org.apache.ignite.cache.CacheRebalanceMode;
 import org.apache.ignite.cluster.ClusterGroup;
-import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.DataRegionConfiguration;
 import org.apache.ignite.configuration.DataStorageConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
-import org.apache.ignite.lang.IgniteBiPredicate;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
-public class ClusterMasterZ {
+public class ClusterMasterW {
 
     private static final String cacheName = "STRETCH-CACHE";
     private static final String dataRegionName = "150MB_Region";
-    private static boolean alreadyRequested = false;
+
+    private static boolean alreadyRequested = true;
 
 
-    private static final String configTemplate = "./config/group/X/ClusterWorker.xml";
 
     public static void main(String[] args){
 
@@ -41,8 +40,7 @@ public class ClusterMasterZ {
 
         StretchAffinityFunctionX stretchAffinityFunctionX = new StretchAffinityFunctionX(false, 1024);
         cacheConfiguration.setAffinity(stretchAffinityFunctionX);
-        cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
-
+        cacheConfiguration.setRebalanceMode(CacheRebalanceMode.ASYNC);
 
 
 
@@ -51,10 +49,10 @@ public class ClusterMasterZ {
         DataRegionConfiguration regionCfg = new DataRegionConfiguration();
         // Region name.
         regionCfg.setName(dataRegionName);
-        // Setting the size of the default memory region tevent.equalsIgnoreCase("NODE-JOINED")o 100MB to achieve this.
+        // Setting the size of the default memory region to 80MB to achieve this.
         regionCfg.setInitialSize(
                 50L * 1024 * 1024);
-        regionCfg.setMaxSize(3000L * 1024 * 1024);
+        regionCfg.setMaxSize(400L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
@@ -62,25 +60,13 @@ public class ClusterMasterZ {
         storageCfg.setDefaultDataRegionConfiguration(regionCfg);
         // Applying the new configuration.
         igniteConfiguration.setDataStorageConfiguration(storageCfg);
-        igniteConfiguration.setRebalanceThreadPoolSize(4);
-
-
-
-
-
-
-
-
-
-
-
-
 
         Map<String, String> userAtt = new HashMap<String, String>() {{
             put("group",groupName);
             put("role", "master");
             put("donated","no");
-            put("region-max", "3000");
+            put("region-max", "400");
+
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setUserAttributes(userAtt);
@@ -95,7 +81,8 @@ public class ClusterMasterZ {
             Map<UUID, Object> offerReceived = new HashMap<>();
 
 
-/*            //All other listeners here!!
+/*
+            //All other listeners here!!
 
             //4.Listen for offer grant
             mastersMessanger.remoteListen(OFFER_GRANTED, new IgniteBiPredicate<UUID, Object>() {
@@ -219,9 +206,8 @@ public class ClusterMasterZ {
                     }
                     return true;
                 }
-            });*/
-
-
+            });
+*/
 
     }
 }
