@@ -54,7 +54,7 @@ public class ClusterMasterZ {
         // Setting the size of the default memory region tevent.equalsIgnoreCase("NODE-JOINED")o 100MB to achieve this.
         regionCfg.setInitialSize(
                 50L * 1024 * 1024);
-        regionCfg.setMaxSize(3000L * 1024 * 1024);
+        regionCfg.setMaxSize(750L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
@@ -80,7 +80,7 @@ public class ClusterMasterZ {
             put("group",groupName);
             put("role", "master");
             put("donated","no");
-            put("region-max", "3000");
+            put("region-max", "750");
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setUserAttributes(userAtt);

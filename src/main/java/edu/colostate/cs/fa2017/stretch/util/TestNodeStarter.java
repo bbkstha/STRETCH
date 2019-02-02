@@ -68,7 +68,7 @@ public class TestNodeStarter {
         System.out.println("FInal stage of borrowing.");
 
         String idleNodeTobeUsed = ignite.cluster().localNode().id().toString();
-        String hotPartitions = "511,";
+        String hotPartitions = "5,";
         String host = "cut-bank";
         String group = "GG";
         String placeHolder = "_GROUP-NAME_" + "##" + "_DONATED_" + "##" + "_HOT-PARTITIONS_"+ "##" + "_CAUSE_" +"##"+ "_IDLE-NODE_";

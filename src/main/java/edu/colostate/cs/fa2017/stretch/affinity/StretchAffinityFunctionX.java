@@ -418,12 +418,12 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
 
     /** {@inheritDoc} */
     @Override public List<List<ClusterNode>> assignPartitions(AffinityFunctionContext affCtx) {
-        System.out.println(parts);
+        //System.out.println(parts);
         List<List<ClusterNode>> assignments = new ArrayList<>(parts);
 
         //String event = affCtx.discoveryEvent().shortDisplay().split(":")[0];
 
-        System.out.println("The event is: "+affCtx.discoveryEvent().shortDisplay().split(":")[0]);
+        //System.out.println("The event is: "+affCtx.discoveryEvent().shortDisplay().split(":")[0]);
 
         /*if(affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED")) {
 
@@ -468,7 +468,7 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
 
         List<ClusterNode> nodes = affCtx.currentTopologySnapshot();
 
-        System.out.println("#nodes"+nodes.size());
+        //System.out.println("#nodes"+nodes.size());
 
         ClusterNode newlyJoinedNode = affCtx.discoveryEvent().eventNode();
         int index=0;
@@ -492,34 +492,34 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
         int[] partitionsToMoveAscending = null;
         String causeOfHotspot = "M";
 
-        System.out.println("Is the node donated: " + donated);
+        //System.out.println("Is the node donated: " + donated);
 
 
         if (donated.equals("yes")) {
 
-            System.out.println("The size of nodes is: "+nodes.size());
+            //System.out.println("The size of nodes is: "+nodes.size());
             nodes.remove(newlyJoinedNode);
-            System.out.println("The size of nodes is: "+nodes.size());
+            //System.out.println("The size of nodes is: "+nodes.size());
 
 
-            System.out.println("ENtering partiton movement!");
+            //System.out.println( "ENtering partiton movement!");
             //Hotspot info coming via config xml
             String hotspot_partitions = newlyJoinedNode.attribute("hotspot-partitions"); //separated by commas
             String[] partitionsToMove = hotspot_partitions.split(",");
-            System.out.println("Partitions to move: "+hotspot_partitions);
-            System.out.println("Partitons to move: count "+partitionsToMove.length);
+            //System.out.println("Partitions to move: "+hotspot_partitions);
+            //System.out.println("Partitons to move: count "+partitionsToMove.length);
 
-            System.out.println("LEN: "+partitionsToMove.length);
+           //System.out.println("LEN: "+partitionsToMove.length);
 
 
             String idleNodeID = newlyJoinedNode.attribute("idle");
             causeOfHotspot = newlyJoinedNode.attribute("cause");
-            System.out.println("The idle node to use: "+idleNodeID);
+            //System.out.println("The idle node to use: "+idleNodeID);
 
             for(int k=0; k< nodes.size(); k++){
                 if(nodes.get(k).id().toString().equals(idleNodeID)){
 
-                    System.out.println("Added to newList: "+nodes.get(k).id());
+                    //System.out.println("Added to newList: "+nodes.get(k).id());
                     newList.add(nodes.get(k));
                     break;
                 }
@@ -540,12 +540,14 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
 
         }
 
+        //System.out.println(partitionsToMoveAscending);
 
 
 
         boolean flag = donated.equals("yes");
-        System.out.println("flag: "+flag);
+        //System.out.println("flag: "+flag);
         int j = 0;
+        //System.out.println(parts);
         for (int i = 0; i < parts; i++) {
 
             if (flag && j < partitionsToMoveAscending.length) {
@@ -566,22 +568,28 @@ public class StretchAffinityFunctionX implements AffinityFunction, Serializable 
 */
                         }else if(causeOfHotspot.equalsIgnoreCase("M")){
 
+                            //System.out.println(""+i+"Movement");
+                            //System.out.println(""+j);
+
                             assignments.add(newList);
                         }
                     } else {
                         //System.out.println("The node for moved partition id: " + i + " is: " + affCtx.previousAssignment(i));
                         //assignments.add(affCtx.previousAssignment(i));
+                        //System.out.println(""+i+"Entering partiton assignment after mismatch.");
                         List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups(), neighborhoodCache);
                         assignments.add(partAssignment);
                     }
             }else{
 
-                System.out.println(" "+i+" Entered partition assignment!");
+                //System.out.println(" "+i+" Entered partition assignment!");
                 //System.out.println("The size of nodes: "+nodes.size());
                 List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups(), neighborhoodCache);
                 assignments.add(partAssignment);
             }
         }
+
+        System.out.println("Return assignments");
 
         return assignments;
     }

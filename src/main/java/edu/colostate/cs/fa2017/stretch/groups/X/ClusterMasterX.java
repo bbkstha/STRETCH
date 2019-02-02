@@ -67,7 +67,7 @@ public class ClusterMasterX {
         // Setting the size of the default memory region to 80MB to achieve this.
         regionCfg.setInitialSize(
                 50L * 1024 * 1024);
-        regionCfg.setMaxSize(200L * 1024 * 1024);
+        regionCfg.setMaxSize(500L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
@@ -84,7 +84,7 @@ public class ClusterMasterX {
             put("group",groupName);
             put("role", "master");
             put("donated","no");
-            put("region-max", "100");
+            put("region-max", "500");
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setUserAttributes(userAtt);
@@ -132,14 +132,14 @@ public class ClusterMasterX {
                             put("uname", "bbkstha");
                             put("passwd", "Bibek2753");
                             put("cfg", configPath);
-                            put("nodes", 6);
+                            put("nodes", 5);
                         }};
                         hostNames.add(tmpMap);
                         Map<String, Object> dflts = null;
 
                         System.out.println("Starting new node!!!!!");
 
-                        ignite.cluster().startNodes(hostNames, dflts, false, 10000, 7);
+                        ignite.cluster().startNodes(hostNames, dflts, false, 10000, 5);
 
                         try {
                             sleep(10000);
@@ -187,12 +187,15 @@ public class ClusterMasterX {
                     if (msg.toString().split("::")[3].equals(ignite.cluster().localNode().id().toString())) {
                         System.out.println("OFFER RECEIVED");
                         int expectedNumberOfOffers = ignite.cluster().forAttribute("role", "master").nodes().size() - 1;
-                        //System.out.println("Expecting "+expectedNumberOfOffers+" offers.");
-                        offerReceived.put(nodeId, msg);
-                        //System.out.println("The number of offer is: "+offerReceived.size());
-                        if (offerReceived.size() < expectedNumberOfOffers) {
-                            System.out.println("Still Listening");
-                            return true;
+                        System.out.println("Expecting "+expectedNumberOfOffers+" offers.");
+                        synchronized (offerReceived){
+                            offerReceived.put(nodeId, msg);
+                            System.out.println("The number of offer is: "+offerReceived.size());
+                            if (offerReceived.size() < expectedNumberOfOffers) {
+                                System.out.println("Still Listening");
+                                return true;
+                            }
+
                         }
 
 
@@ -208,7 +211,7 @@ public class ClusterMasterX {
                             double tmpUsage = Double.parseDouble(offer[0]);
                             double tmpcapacity = Double.parseDouble(offer[2]);
 
-                            if (tmpUsage < usage && tmpcapacity > maxCapacity) {
+                            if (tmpUsage <= usage && tmpcapacity >= maxCapacity) {
                                 usage = Double.parseDouble(offer[0]);
                                 idlenodeID = offer[1];
                                 maxCapacity = tmpcapacity;
@@ -218,6 +221,8 @@ public class ClusterMasterX {
                         Object reply = sender + "::" + idlenodeID;
 
                         System.out.println("OfferAcknowledged: "+reply);
+
+                        offerReceived.clear();
 
                         mastersMessanger.send(OFFER_ACKNOWLEDGED, reply);
                     }
@@ -300,7 +305,7 @@ public class ClusterMasterX {
                             Object offer = (Object) minMemoryUsed + "::" + minMemoryUsedID + "::" + maxMemoryAllocatedPerNode.get(minMemoryUsedID) + "::" + nodeId ;
 
                             System.out.println("SENDING RESPONSE: "+offer);
-                            mastersMessanger.send(OFFER_TOPIC, offer);
+                            mastersMessanger.sendOrdered(OFFER_TOPIC, offer, 0);
                         }
                     }
                     return true;
@@ -313,12 +318,15 @@ public class ClusterMasterX {
                         @Override
                         public boolean apply(UUID nodeId, Object msg) {
 
+
                             long startTimeInMilli = System.currentTimeMillis();
 
 
-                            //System.out.println("I am monitoring "+ignite.cluster().localNode().attribute("group"));
+
                             //System.out.println("Alreadyrequested Status: "+alreadyRequested);
 
+                            if(!alreadyRequested) {
+                                System.out.println("I am monitoring "+ignite.cluster().localNode().attribute("group"));
 
 
 
@@ -336,7 +344,7 @@ public class ClusterMasterX {
                                     int[] localParts = ignite.affinity(cacheName).allPartitions(ignite.cluster().forNode(c).node());
 
 
-                                            String remoteDataRegionMetrics = ignite.compute(ignite.cluster().forNode(c)).apply(
+                                    String remoteDataRegionMetrics = ignite.compute(ignite.cluster().forNode(c)).apply(
                                             new IgniteClosure<Integer, String>() {
                                                 @Override
                                                 public String apply(Integer x) {
@@ -354,8 +362,8 @@ public class ClusterMasterX {
 
                                                     //System.out.println("The size from coutn is: "+(keysCountInPartition * 697.05/(1024*1024)));
                                                     //System.out.println("MEM PAGES: "+(dM.getPhysicalMemoryPages() * 4 / (double) 1024));
-                                                    String stat = "" + (keysCountInPartition * 697.05/(double) (1024*1024)) +","
-                                                            + metrics.getCurrentCpuLoad() + ","+ (dM.getPhysicalMemoryPages() * 4 / (double) 1024);
+                                                    String stat = "" + (keysCountInPartition * 697.05 / (double) (1024 * 1024)) + ","
+                                                            + metrics.getCurrentCpuLoad() + "," + (dM.getPhysicalMemoryPages() * 4 / (double) 1024);
 
                                                     return stat;
                                                 }
@@ -396,19 +404,18 @@ public class ClusterMasterX {
                                 UUID maxCpuUsedID = ((TreeMap<Double, UUID>) cpuUsage).lastEntry().getValue();
 
 
+                                if (maxMemoryUsed > 0.5 && !alreadyRequested) {
 
-                                if (maxMemoryUsed > 0.1 && !alreadyRequested) {
-
-                                    System.out.println("I am group: "+groupName+" and I reached a hotspot.And my memory util is: "+maxMemoryUsed);
+                                    System.out.println("I am group: " + groupName + " and I reached a hotspot.And my memory util is: " + maxMemoryUsed*500);
                                     String cause = "";
                                     UUID hotspotNodeID = maxMemoryUsedID;
-                                    if (maxMemoryUsedID.equals(maxCpuUsedID)){
+                                    if (maxMemoryUsedID.equals(maxCpuUsedID)) {
                                         cause = "CM";
                                         //hotspotNodeID = maxMemoryUsedID;
-                                    }else if(maxMemoryUsed > maxCpuUsed){
-                                       cause  = "M";
+                                    } else if (maxMemoryUsed > maxCpuUsed) {
+                                        cause = "M";
                                         //hotspotNodeID = maxMemoryUsedID;
-                                    } else if(maxCpuUsed > maxMemoryUsed){
+                                    } else if (maxCpuUsed > maxMemoryUsed) {
                                         cause = "C";
                                         hotspotNodeID = maxCpuUsedID;
                                     }
@@ -443,7 +450,6 @@ public class ClusterMasterX {
                                     );
 
 
-
                                     //calculate skewness
                                     /*
                                     Implementation required
@@ -453,9 +459,8 @@ public class ClusterMasterX {
                                     LinkedHashMap<Integer, Long> reverseSortedMap = new LinkedHashMap<>();
                                     partitionToCount.entrySet().stream().sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
                                             .forEachOrdered(x -> reverseSortedMap.put(x.getKey(), x.getValue()));
-                                    System.out.println(reverseSortedMap);
-                                    System.out.println(reverseSortedMap.size());
-
+                                    //System.out.println(reverseSortedMap);
+                                    //System.out.println(reverseSortedMap.size());
 
 
                                     String partitionToMove = "";
@@ -464,36 +469,40 @@ public class ClusterMasterX {
 
 
                                     long sumed = 0;
-                                    for (Map.Entry<Integer, Long> d: reverseSortedMap.entrySet()) {
+                                    for (Map.Entry<Integer, Long> d : reverseSortedMap.entrySet()) {
 
-                                        sumed+=d.getValue();
+                                        sumed += d.getValue();
 
                                     }
 
-                                    double threshold = sumed* 697.05/(double) (2 * 1024*1024);
+                                    System.out.println("Current stat of hotspot: "+sumed * 697.05 / (1024 *1024));
 
-                                    int size = reverseSortedMap.size()/2;
-                                    for (Map.Entry<Integer, Long> e: reverseSortedMap.entrySet()) {
+                                    double threshold = sumed * 697.05 * 0.9 / (double) (1024 * 1024);
+                                    System.out.println(threshold);
+                                    int size = reverseSortedMap.size() / 2;
+                                    for (Map.Entry<Integer, Long> e : reverseSortedMap.entrySet()) {
 
                                         //System.out.println("Partition is: "+e.getKey()+" and count is: "+e.getValue());
-                                        if(select < size){
 
-                                            partitionToMove = partitionToMove + e.getKey() + ",";
-                                            amountToTransfer += e.getValue()* 697.05/(double) (1024*1024);
-                                            /*if(amountToTransfer > threshold){
-                                                break;
-                                            }*/
+
+                                        partitionToMove = partitionToMove + e.getKey() + ",";
+                                        amountToTransfer += e.getValue() * 697.05 / (double) (1024 * 1024);
+                                        if (amountToTransfer > threshold) {
+                                            System.out.println("Amount to transfer: " + amountToTransfer + " has surpassed threshold: " + threshold);
+                                            break;
                                         }
-                                        select++;
+
+
                                     }
 
-                                    System.out.println("The length of partitions to move is: "+partitionToMove.split(",").length);
-                                    System.out.println("The length of partitions to move is: "+partitionToMove);
+                                    System.out.println("The length of partitions to move is: " + partitionToMove.split(",").length);
+                                    //System.out.println("The length of partitions to move is: "+partitionToMove);
 
                                     hotspotPartitions = partitionToMove;
                                     alreadyRequested = true;
                                     mastersMessanger.send(REQUEST_TOPIC, (Object) cause);
                                 }
+                            }
                             return true;
                         }
                     });

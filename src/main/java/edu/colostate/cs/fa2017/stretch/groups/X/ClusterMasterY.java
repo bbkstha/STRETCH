@@ -54,7 +54,7 @@ public class ClusterMasterY {
         // Setting the size of the default memory region to 80MB to achieve this.
         regionCfg.setInitialSize(
                 50L * 1024 * 1024);
-        regionCfg.setMaxSize(100L * 1024 * 1024);
+        regionCfg.setMaxSize(500L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
@@ -67,7 +67,7 @@ public class ClusterMasterY {
             put("group",groupName);
             put("role", "master");
             put("donated","no");
-            put("region-max", "100");
+            put("region-max", "500");
 
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);

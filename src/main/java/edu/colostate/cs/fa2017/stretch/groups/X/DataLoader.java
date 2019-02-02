@@ -95,7 +95,7 @@ public class DataLoader {
 
         }};
         igniteConfiguration.setUserAttributes(userAtt);
-        igniteConfiguration.setClientMode(true);
+        igniteConfiguration.setClientMode(false);
 
         // Start Ignite node.
         Ignite ignite = Ignition.start(igniteConfiguration);
@@ -229,6 +229,12 @@ public class DataLoader {
         System.out.println("The value of counter is: "+counter);
         System.out.println("The sum is: "+sum);
         ClusterMetrics clusterMetrics= ignite.cluster().metrics();
+        Object key = "bbk";
+
+
+
+        ignite.compute().affinityRun(cacheName, key,
+                () -> System.out.println("Co-located using affinityRun [key= " + key + ", value=" + cache.localSize(CachePeekMode.PRIMARY) + ']'));;
 
 
 
