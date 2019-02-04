@@ -57,6 +57,7 @@ public class ClusterMasterZ {
         regionCfg.setMaxSize(750L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
+
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
         // Setting the data region configuration.
         storageCfg.setDefaultDataRegionConfiguration(regionCfg);

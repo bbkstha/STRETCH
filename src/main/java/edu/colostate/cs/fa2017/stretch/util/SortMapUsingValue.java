@@ -29,9 +29,16 @@ public class SortMapUsingValue {
 //            System.out.println(c[m]);
 //        }
 
+        //System.out.println("The answer is: "+(4&3));
 
 
-        sortByValueJava8Stream();
+        String partitionToMove = "2,3,4,5,";
+        System.out.println(partitionToMove);
+        System.out.println("The length of partitions to move is: " + partitionToMove.split(",").length);
+        System.out.println("The length of partitions to move is: " + partitionToMove.substring(0, partitionToMove.length()-1).split(",").length);
+
+
+       // sortByValueJava8Stream();
     }
 
     private static void sortByValueJava8Stream()

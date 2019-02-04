@@ -58,6 +58,7 @@ public class ClusterMasterX {
         StretchAffinityFunctionX stretchAffinityFunctionX = new StretchAffinityFunctionX(false, 1024);
         cacheConfiguration.setAffinity(stretchAffinityFunctionX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
+        cacheConfiguration.setOnheapCacheEnabled(false);
 
         // Changing total RAM size to be used by Ignite Node.
         DataStorageConfiguration storageCfg = new DataStorageConfiguration();
@@ -495,7 +496,10 @@ public class ClusterMasterX {
 
                                     }
 
+
+
                                     System.out.println("The length of partitions to move is: " + partitionToMove.split(",").length);
+
                                     //System.out.println("The length of partitions to move is: "+partitionToMove);
 
                                     hotspotPartitions = partitionToMove;

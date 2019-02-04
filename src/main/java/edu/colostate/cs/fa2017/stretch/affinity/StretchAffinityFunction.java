@@ -20,6 +20,9 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
     //public AffinityFunctionContext affinityFunctionContext;
 
+
+    private static Map<String, List<Integer>> keyToPartitionMap = new HashMap<>();
+
     private final static Logger LOGGER = Logger.getLogger(StretchAffinityFunction.class.getName());
 
 
@@ -214,11 +217,11 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
 
 
-    public Long getPartitionToKeyCount(int part){
+    /*public Long getPartitionToKeyCount(int part){
 
         return partitionToCount.get(part);
     }
-
+*/
 
         /*if (mask >= 0) {
             int h;
@@ -447,6 +450,13 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
     /** {@inheritDoc} */
     @Override public List<List<ClusterNode>> assignPartitions(AffinityFunctionContext affCtx) {
+
+
+        //Number of partition is determined by the total nodes
+
+
+
+
 
         List<List<ClusterNode>> assignments = new ArrayList<>(parts);
         List<ClusterNode> nodes = affCtx.currentTopologySnapshot();

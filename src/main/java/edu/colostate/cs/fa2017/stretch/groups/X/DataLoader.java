@@ -7,6 +7,7 @@ import org.apache.ignite.cache.CacheMetrics;
 import org.apache.ignite.cache.CacheMode;
 import org.apache.ignite.cache.CachePeekMode;
 import org.apache.ignite.cache.CacheRebalanceMode;
+import org.apache.ignite.cache.affinity.Affinity;
 import org.apache.ignite.cache.affinity.AffinityKeyMapped;
 import org.apache.ignite.cluster.ClusterGroup;
 import org.apache.ignite.cluster.ClusterMetrics;
@@ -74,13 +75,16 @@ public class DataLoader {
         cacheConfiguration.setManagementEnabled(true);
         cacheConfiguration.setStatisticsEnabled(true);
         cacheConfiguration.setName(cacheName);
+
+        cacheConfiguration.setOnheapCacheEnabled(false);
+
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setRebalanceThreadPoolSize(4);
 
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionX stretchAffinityFunctionX = new StretchAffinityFunctionX(false, 1024);
-        cacheConfiguration.setAffinity(stretchAffinityFunctionX);
+       /* StretchAffinityFunctionX stretchAffinityFunctionX = new StretchAffinityFunctionX(false, 1024);
+        cacheConfiguration.setAffinity(stretchAffinityFunctionX);*/
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
         cacheConfiguration.setStatisticsEnabled(true);
         //cacheConfiguration.setDataRegionName("default");
@@ -102,6 +106,10 @@ public class DataLoader {
 
         //ignite.cluster().resetMetrics();
         IgniteCache<GeoEntry, String> cache = ignite.getOrCreateCache(cacheConfiguration);
+
+        Affinity affinity = ignite.affinity(cacheName);
+
+
         cache.clear();
 
 
@@ -233,11 +241,24 @@ public class DataLoader {
 
 
 
+
+
         ignite.compute().affinityRun(cacheName, key,
                 () -> System.out.println("Co-located using affinityRun [key= " + key + ", value=" + cache.localSize(CachePeekMode.PRIMARY) + ']'));;
 
+        Collection<ClusterNode> lst = affinity.mapKeyToPrimaryAndBackups(key);
+        ignite.compute(ignite.cluster().forNode(lst.iterator().next())).apply(
+                new IgniteClosure<Integer, Long>() {
+                    @Override
+                    public Long apply(Integer x) {
 
 
+                    return new Random().nextLong();
+
+                    }
+                },
+                1
+        );
 
 
         try {
