@@ -327,7 +327,7 @@ public class ClusterMasterX {
                             //System.out.println("Alreadyrequested Status: "+alreadyRequested);
 
                             if(!alreadyRequested) {
-                                System.out.println("I am monitoring "+ignite.cluster().localNode().attribute("group"));
+                                //System.out.println("I am monitoring "+ignite.cluster().localNode().attribute("group"));
 
 
 
@@ -380,6 +380,8 @@ public class ClusterMasterX {
 
                                     double cpu = Double.parseDouble(remoteDataRegionMetrics.split(",")[1]);
 
+                                    System.out.println("The CPU usage is: "+cpu+" and used memory is "+usage * maxMemoryAllocated);
+
                                     boolean flag1 = true;
                                     while (flag1) {
                                         if (!offheapUsage.containsKey(usage)) {
@@ -405,7 +407,7 @@ public class ClusterMasterX {
                                 UUID maxCpuUsedID = ((TreeMap<Double, UUID>) cpuUsage).lastEntry().getValue();
 
 
-                                if (maxMemoryUsed > 0.5 && !alreadyRequested) {
+                                if (maxMemoryUsed > 0.8 && !alreadyRequested) {
 
                                     System.out.println("I am group: " + groupName + " and I reached a hotspot.And my memory util is: " + maxMemoryUsed*500);
                                     String cause = "";
@@ -515,13 +517,13 @@ public class ClusterMasterX {
 
             boolean flag = true;
             while(flag){
-                if(ignite.cluster().forAttribute("role","master").nodes().size() == numberOfMastersExpected){
+                if(ignite.cluster().forAttribute("role","master").nodes().size() == numberOfMastersExpected+1){
                     //Need to wait for few seconds to let the system come to stable state
                     if(!alreadyRequested){
 
                         Thread.sleep(3000);
                         //System.out.println("NUmber of masters: "+ignite.cluster().forAttribute("role","master").nodes().size());
-                        //System.out.println("START");
+                       // System.out.println("START");
                         mastersMessanger.send(RESOURCE_MONITOR, "START");
                     }
                 }

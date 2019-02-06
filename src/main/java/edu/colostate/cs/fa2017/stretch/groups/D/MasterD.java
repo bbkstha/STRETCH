@@ -70,7 +70,7 @@ public class MasterD {
                 int[] partitions = affinity.primaryPartitions(node);
                 Map<Integer, Long> partitionToKeyCountMap = new HashMap<>();
                 for (int i=0; i< partitions.length; i++){
-                    partitionToKeyCountMap.put(partitions[i], stretchAffinityFunction.getPartitionToKeyCount(partitions[i]));
+                    //partitionToKeyCountMap.put(partitions[i], stretchAffinityFunction.getPartitionToKeyCount(partitions[i]));
                 }
                 clusterToPartitionInfo.put(node, partitionToKeyCountMap);
             }

@@ -2,6 +2,7 @@ package edu.colostate.cs.fa2017.stretch.groups.X;
 
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunction;
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionX;
+import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionXX;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteMessaging;
 import org.apache.ignite.Ignition;
@@ -39,8 +40,8 @@ public class ClusterMasterZ {
         cacheConfiguration.setName(cacheName);
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionX stretchAffinityFunctionX = new StretchAffinityFunctionX(false, 1024);
-        cacheConfiguration.setAffinity(stretchAffinityFunctionX);
+        /*StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 1056);
+        cacheConfiguration.setAffinity(stretchAffinityFunctionXX);*/
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
 
 
@@ -82,6 +83,11 @@ public class ClusterMasterZ {
             put("role", "master");
             put("donated","no");
             put("region-max", "750");
+            put("split","yes");
+            put("keyToSplit","bb");
+            put("partitionToSplit","330");
+            put("map","./hashmap.ser");
+
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setUserAttributes(userAtt);

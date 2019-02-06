@@ -1,11 +1,17 @@
 package edu.colostate.cs.fa2017.stretch.util;
 
 
+import java.io.*;
 import java.util.*;
 
 import static org.apache.ignite.internal.util.lang.GridFunc.rand;
 
 public class SortMapUsingValue {
+
+    private static final char[] base32 = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'b', 'c', 'd', 'e', 'f',
+            'g', 'h', 'j', 'k', 'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z' };
+
+    private static Map<String, Integer > keyToPartitionMap = new HashMap<>();
 
 
     public static void main(String[] args) {
@@ -32,13 +38,122 @@ public class SortMapUsingValue {
         //System.out.println("The answer is: "+(4&3));
 
 
-        String partitionToMove = "2,3,4,5,";
+        /*String partitionToMove = "2,3,4,5,";
         System.out.println(partitionToMove);
         System.out.println("The length of partitions to move is: " + partitionToMove.split(",").length);
         System.out.println("The length of partitions to move is: " + partitionToMove.substring(0, partitionToMove.length()-1).split(",").length);
+*/
+
+        /*for(int i=0; i< base32.length; i++){
+            for(int j = 0; j< base32.length; j++){
+                String tmp = Character.toString(base32[i]);
+                tmp+=Character.toString(base32[j]);
+                keyToPartitionMap.put(tmp,(32*i)+j);
+            }
+        }
+
+        for(int j = 0; j< base32.length; j++){
+
+            String tmpHotKey = "bb";
+
+            tmpHotKey+=Character.toString(base32[j]);
+            keyToPartitionMap.put(tmpHotKey,(1024+j));
+        }
+        keyToPartitionMap.remove("bb");
+
+        System.out.println(keyToPartitionMap.size());*/
 
 
-       // sortByValueJava8Stream();
+        /*try
+        {
+            FileOutputStream fos =
+                    new FileOutputStream("./hashmap.ser");
+            ObjectOutputStream oos = new ObjectOutputStream(fos);
+            oos.writeObject(keyToPartitionMap);
+            oos.close();
+            fos.close();
+            System.out.printf("Serialized HashMap data is saved in hashmap.ser");
+        }catch(IOException ioe)
+        {
+            ioe.printStackTrace();
+        }*/
+
+        Map<String, Integer> map = null;
+        try
+        {
+            FileInputStream fis = new FileInputStream("./hashmap.ser");
+            ObjectInputStream ois = new ObjectInputStream(fis);
+            map = (HashMap) ois.readObject();
+            ois.close();
+            fis.close();
+        }catch(IOException ioe)
+        {
+            ioe.printStackTrace();
+            return;
+        }catch(ClassNotFoundException c)
+        {
+            System.out.println("Class not found");
+            c.printStackTrace();
+            return;
+        }
+
+        for(int j = 0; j< base32.length; j++){
+
+            String tmpHotKey = "bbk";
+
+            tmpHotKey+=Character.toString(base32[j]);
+            map.put(tmpHotKey,(map.size()+j));
+        }
+        map.remove("bbk");
+
+        try {
+            FileOutputStream fos =
+                    new FileOutputStream("./hashmap1.ser");
+            ObjectOutputStream oos = new ObjectOutputStream(fos);
+            oos.writeObject(map);
+            oos.close();
+            fos.close();
+            System.out.printf("Serialized HashMap data is saved in hashmap1.ser");
+        }catch(IOException ioe)
+        {
+            ioe.printStackTrace();
+        }
+
+        try
+        {
+            FileInputStream fis = new FileInputStream("./hashmap1.ser");
+            ObjectInputStream ois = new ObjectInputStream(fis);
+            map = (HashMap) ois.readObject();
+            ois.close();
+            fis.close();
+        }catch(IOException ioe)
+        {
+            ioe.printStackTrace();
+            return;
+        }catch(ClassNotFoundException c)
+        {
+            System.out.println("Class not found");
+            c.printStackTrace();
+            return;
+        }
+        Set set = map.entrySet();
+        Iterator iterator = set.iterator();
+        while(iterator.hasNext()) {
+            Map.Entry mentry = (Map.Entry)iterator.next();
+            System.out.print("key: "+ mentry.getKey() + " & Value: ");
+            System.out.println(mentry.getValue());
+        }
+
+
+
+
+
+
+
+
+
+
+        // sortByValueJava8Stream();
     }
 
     private static void sortByValueJava8Stream()

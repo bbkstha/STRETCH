@@ -11,6 +11,7 @@ import org.apache.ignite.internal.processors.cache.GridCacheUtils;
 import org.apache.ignite.internal.util.typedef.internal.A;
 import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteBiTuple;
+import scala.Char;
 
 import java.io.Serializable;
 import java.util.*;
@@ -21,7 +22,7 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
     //public AffinityFunctionContext affinityFunctionContext;
 
 
-    private static Map<String, List<Integer>> keyToPartitionMap = new HashMap<>();
+    private static Map<String, Integer> keyToPartitionMap = new HashMap<>();
 
     private final static Logger LOGGER = Logger.getLogger(StretchAffinityFunction.class.getName());
 
@@ -56,6 +57,30 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
 
     public StretchAffinityFunction() {
+
+        initializeKeyToPartitionMap();
+
+
+
+    }
+
+    private void initializeKeyToPartitionMap(){
+
+        /*for(int i=0; i< base32.length; i++){
+            for(int j = 0; j< base32.length; j++){
+                String tmp = Character.toString(base32[i]);
+                tmp+=Character.toString(base32[j]);
+                keyToPartitionMap.put(tmp,Arrays.asList((32*i)+j));
+            }
+        }*/
+        for(int i=0; i< base32.length; i++){
+            for(int j = 0; j< base32.length; j++){
+                String tmp = Character.toString(base32[i]);
+                tmp+=Character.toString(base32[j]);
+                keyToPartitionMap.put(tmp,(32*i)+j);
+            }
+        }
+
 
     }
 
@@ -127,7 +152,24 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
             throw new IllegalArgumentException("Null key is passed for a partition calculation. " +
                     "Make sure that an affinity key that is used is initialized properly.");
 
-        //Testing
+
+        String p = key.toString().substring(added_precision, added_precision + 1);
+        if (keyToPartitionMap.containsKey(p)) {
+
+            return keyToPartitionMap.get(p);
+        } else {
+            for (int k = added_precision + 2; k < key.toString().length(); k++) {
+
+                p += Character.toString(key.toString().charAt(k));
+                if (keyToPartitionMap.containsKey(p)) {
+                    return keyToPartitionMap.get(p);
+                }
+            }
+        }
+
+        return -1;
+    }
+       /*  //Testing
         //return key.hashCode() % parts;
         //Without considering masters: assuming all nodes as part of whole
         int numberOfNodes = totalNodes;
@@ -198,7 +240,7 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 //        }
 
         return U.safeAbs(partID);
-    }
+    }*/
 
 
 
@@ -454,11 +496,20 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
         //Number of partition is determined by the total nodes
 
+        if(affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED") && affCtx.discoveryEvent().eventNode().attribute("status").toString().equalsIgnoreCase("new")){
+            totalNodes = affCtx.currentTopologySnapshot().size();
+            parts = totalNodes * 32;
+        }
+
+        //keyToPartitionMap;
+
+
 
 
 
 
         List<List<ClusterNode>> assignments = new ArrayList<>(parts);
+
         List<ClusterNode> nodes = affCtx.currentTopologySnapshot();
         Map<UUID, Collection<ClusterNode>> neighborhoodCache = exclNeighbors ?
                 GridCacheUtils.neighbors(affCtx.currentTopologySnapshot()) : null;

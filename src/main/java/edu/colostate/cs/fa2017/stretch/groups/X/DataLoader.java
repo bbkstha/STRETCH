@@ -2,6 +2,7 @@ package edu.colostate.cs.fa2017.stretch.groups.X;
 
 import ch.hsr.geohash.GeoHash;
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionX;
+import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionXX;
 import org.apache.ignite.*;
 import org.apache.ignite.cache.CacheMetrics;
 import org.apache.ignite.cache.CacheMode;
@@ -21,6 +22,7 @@ import org.apache.ignite.internal.processors.cache.persistence.DataRegionMetrics
 import org.apache.ignite.lang.IgniteClosure;
 import org.apache.ignite.mxbean.DataRegionMetricsMXBean;
 
+import javax.cache.Cache;
 import javax.xml.crypto.Data;
 import java.io.*;
 import java.util.*;
@@ -83,8 +85,8 @@ public class DataLoader {
 
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-       /* StretchAffinityFunctionX stretchAffinityFunctionX = new StretchAffinityFunctionX(false, 1024);
-        cacheConfiguration.setAffinity(stretchAffinityFunctionX);*/
+        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 1024*32);
+        cacheConfiguration.setAffinity(stretchAffinityFunctionXX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
         cacheConfiguration.setStatisticsEnabled(true);
         //cacheConfiguration.setDataRegionName("default");
@@ -93,9 +95,11 @@ public class DataLoader {
 
 
         Map<String, String> userAtt = new HashMap<String, String>() {{
-            put("group","client");
-            put("role", "loader");
+            put("group","loader");
+            put("role", "master");
             put("donated","no");
+            put("region-max", "1000");
+            put("split","no");
 
         }};
         igniteConfiguration.setUserAttributes(userAtt);
@@ -123,6 +127,8 @@ public class DataLoader {
         BufferedReader bufferReader = null;
         int counter = 0;
 
+        GeoEntry tmpGeoEntry = null;
+
         long sum = 0;
         GeoHashUtils geoHashUtils = new GeoHashUtils();
 
@@ -148,10 +154,20 @@ public class DataLoader {
                         double lon = Double.parseDouble(strLine.split(",")[1]);
                         String timestamp = strLine.split(",")[2];
 
-                        GeoEntry geoEntry = new GeoEntry(lat, lon, 4, timestamp);
+                        GeoEntry geoEntry = new GeoEntry(lat, lon, 12, timestamp);
 
                         //System.out.println("The geohash is: "+geoEntry.geoHash);
                         cache.put(geoEntry, strLine);
+
+                        Thread.sleep(2000);
+
+
+
+                        if(counter == 150000){
+                            //System.out.println("Entered.");
+                            tmpGeoEntry = geoEntry;
+                        }
+
 
                         //byte[] arr = ignite.configuration().getMarshaller().marshal(new GeoEntry(lat, lon, 5, timestamp));
                         //byte[] arr1 = ignite.configuration().getMarshaller().marshal(new String(strLine));
@@ -234,31 +250,68 @@ public class DataLoader {
                 }
             }
 
-        System.out.println("The value of counter is: "+counter);
-        System.out.println("The sum is: "+sum);
+        //System.out.println("The value of counter is: "+counter);
+        //System.out.println("The sum is: "+sum);
         ClusterMetrics clusterMetrics= ignite.cluster().metrics();
-        Object key = "bbk";
+        Object key = tmpGeoEntry.subGeoHash;
 
 
 
+        ClusterNode cn = affinity.mapKeyToNode(tmpGeoEntry);
+        int[] localParts = ignite.affinity(cacheName).allPartitions(ignite.cluster().forNode(cn).node());
 
 
-        ignite.compute().affinityRun(cacheName, key,
-                () -> System.out.println("Co-located using affinityRun [key= " + key + ", value=" + cache.localSize(CachePeekMode.PRIMARY) + ']'));;
+        ignite.compute(ignite.cluster().forNode(cn)).apply(
+                new IgniteClosure<Integer, Integer>() {
+                    @Override
+                    public Integer apply(Integer x) {
 
-        Collection<ClusterNode> lst = affinity.mapKeyToPrimaryAndBackups(key);
+                        DataRegionMetrics dM = ignite.dataRegionMetrics("150MB_Region");
+
+                        ClusterMetrics metrics = ignite.cluster().localNode().metrics();
+
+                        for(int j =0 ; j< x; j++) {
+                            long keysCountInPartition = 0;
+                            for (int i = 0; i < localParts.length; i++) {
+                                //System.out.println(cacheName);
+                                keysCountInPartition += ignite.cache(cacheName).localSizeLong(localParts[i], CachePeekMode.PRIMARY);
+                            }
+                            long keysCountInPartitiona = keysCountInPartition;
+                            //System.out.println("The size from coutn is: " + (keysCountInPartition * 697.05 / (1024 * 1024)));
+                            //System.out.println("MEM PAGES: " + (dM.getPhysicalMemoryPages() * 4 / (double) 1024));
+                            //System.out.println("CPU: " + metrics.getCurrentCpuLoad());
+                        }
+
+                        return 1;
+                    }
+                },
+                10000000
+        );
+
+
+
+        /*Collection<ClusterNode> lst = affinity.mapKeyToPrimaryAndBackups(key);
         ignite.compute(ignite.cluster().forNode(lst.iterator().next())).apply(
                 new IgniteClosure<Integer, Long>() {
                     @Override
                     public Long apply(Integer x) {
 
+                        IgniteCache localCache = ignite.cache(cacheName);
+
+                        Iterator<Cache.Entry<Object, Object>> itr = localCache.localEntries(CachePeekMode.PRIMARY).iterator();
+                        while(itr.hasNext()){
+
+                            Cache.Entry ele = itr.next();
+                            //localCache.localLoadCache();
+                            localCache.put(ele.getKey(), ele.getValue());
+                        }
 
                     return new Random().nextLong();
 
                     }
                 },
                 1
-        );
+        );*/
 
 
         try {
@@ -291,10 +344,9 @@ public class DataLoader {
     }
 
     public static class GeoEntry implements Serializable {
-
+        @AffinityKeyMapped
         private String geoHash;
 
-        @AffinityKeyMapped
         private String subGeoHash;
 
         private String timestamp;
@@ -314,6 +366,10 @@ public class DataLoader {
 
         private String getSubGeoHash() {
             return subGeoHash;
+        }
+
+        private String getTimestamp() {
+            return timestamp;
         }
 
         /**
