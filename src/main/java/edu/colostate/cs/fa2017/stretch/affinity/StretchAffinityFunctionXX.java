@@ -489,10 +489,10 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
             System.out.println("The key is: "+p+" and partition is: "+keyToPartitionMap.get(p));
 
 
-            if(keyToPartitionMap.get(p)==330){
+            /*if(keyToPartitionMap.get(p)==330){
 
                 System.out.println("Inside foudnd 330 even after removable.");
-            }
+            }*/
 
             return keyToPartitionMap.get(p);
 
@@ -513,7 +513,9 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
     /** {@inheritDoc} */
     @Override public List<List<ClusterNode>> assignPartitions(AffinityFunctionContext affCtx) {
         System.out.println("Hello");
+
         List<List<ClusterNode>> assignments = new ArrayList<>(parts);
+
 
 
         //String event = affCtx.discoveryEvent().shortDisplay().split(":")[0];
@@ -635,6 +637,7 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
 
 
         //parts = keyToPartitionMap.size();
+
         System.out.println("The size of parts is: "+parts);
 
 

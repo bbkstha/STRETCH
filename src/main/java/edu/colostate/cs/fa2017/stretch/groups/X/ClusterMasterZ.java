@@ -4,9 +4,12 @@ import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunction;
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionX;
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionXX;
 import org.apache.ignite.Ignite;
+import org.apache.ignite.IgniteCache;
 import org.apache.ignite.IgniteMessaging;
 import org.apache.ignite.Ignition;
+import org.apache.ignite.cache.CacheEntry;
 import org.apache.ignite.cache.CacheMode;
+import org.apache.ignite.cache.CachePeekMode;
 import org.apache.ignite.cache.CacheRebalanceMode;
 import org.apache.ignite.cluster.ClusterGroup;
 import org.apache.ignite.cluster.ClusterNode;
@@ -15,7 +18,9 @@ import org.apache.ignite.configuration.DataRegionConfiguration;
 import org.apache.ignite.configuration.DataStorageConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
 import org.apache.ignite.lang.IgniteBiPredicate;
+import org.apache.ignite.lang.IgniteClosure;
 
+import javax.cache.Cache;
 import java.util.*;
 
 public class ClusterMasterZ {
@@ -83,7 +88,7 @@ public class ClusterMasterZ {
             put("role", "master");
             put("donated","no");
             put("region-max", "750");
-            put("split","yes");
+            put("split","no");
             put("keyToSplit","bb");
             put("partitionToSplit","330");
             put("map","./hashmap.ser");
@@ -98,8 +103,32 @@ public class ClusterMasterZ {
 
             ClusterGroup masterGroup = ignite.cluster().forAttribute("role", "master");
 
-            IgniteMessaging mastersMessanger = ignite.message(masterGroup);
-            Map<UUID, Object> offerReceived = new HashMap<>();
+            //IgniteMessaging mastersMessanger = ignite.message(masterGroup);
+            //Map<UUID, Object> offerReceived = new HashMap<>();
+
+        ignite.compute(ignite.cluster().forAttribute("role","master").forRemotes()).apply(
+                new IgniteClosure<Integer, Integer>() {
+                    @Override
+                    public Integer apply(Integer x) {
+
+                        IgniteCache<DataLoader.GeoEntry, String> localCache = ignite.cache(cacheName);
+                        Iterator<Cache.Entry<DataLoader.GeoEntry, String>> it = localCache.localEntries(CachePeekMode.OFFHEAP).iterator();
+                        int i=0;
+                        while(it.hasNext()){
+                            i++;
+                            Cache.Entry<DataLoader.GeoEntry, String> e = it.next();
+                            System.out.println(""+i+". "+e.getKey()+" and value: "+e.getValue());
+
+                        }
+
+                        System.out.println(i);
+
+
+                        return 1;
+                    }
+                },
+                1
+        );
 
 
 /*            //All other listeners here!!

@@ -2,10 +2,8 @@ package edu.colostate.cs.fa2017.stretch.groups.X;
 
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionX;
 import edu.colostate.cs.fa2017.stretch.util.FileEditor;
-import org.apache.ignite.DataRegionMetrics;
-import org.apache.ignite.Ignite;
-import org.apache.ignite.IgniteMessaging;
-import org.apache.ignite.Ignition;
+import org.apache.ignite.*;
+import org.apache.ignite.cache.CacheEntry;
 import org.apache.ignite.cache.CacheMode;
 import org.apache.ignite.cache.CachePeekMode;
 import org.apache.ignite.cache.CacheRebalanceMode;
@@ -353,7 +351,6 @@ public class ClusterMasterX {
                                                     DataRegionMetrics dM = ignite.dataRegionMetrics(dataRegionName);
 
                                                     ClusterMetrics metrics = ignite.cluster().localNode().metrics();
-
 
                                                     long keysCountInPartition = 0;
                                                     for (int i = 0; i < localParts.length; i++) {

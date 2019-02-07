@@ -4,10 +4,7 @@ import ch.hsr.geohash.GeoHash;
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionX;
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionXX;
 import org.apache.ignite.*;
-import org.apache.ignite.cache.CacheMetrics;
-import org.apache.ignite.cache.CacheMode;
-import org.apache.ignite.cache.CachePeekMode;
-import org.apache.ignite.cache.CacheRebalanceMode;
+import org.apache.ignite.cache.*;
 import org.apache.ignite.cache.affinity.Affinity;
 import org.apache.ignite.cache.affinity.AffinityKeyMapped;
 import org.apache.ignite.cluster.ClusterGroup;
@@ -85,7 +82,7 @@ public class DataLoader {
 
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 1024*32);
+        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 1024+50);
         cacheConfiguration.setAffinity(stretchAffinityFunctionXX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
         cacheConfiguration.setStatisticsEnabled(true);
@@ -125,7 +122,7 @@ public class DataLoader {
         File[] listOfFiles = folder.listFiles();
         String strLine;
         BufferedReader bufferReader = null;
-        int counter = 0;
+        int counter = 1;
 
         GeoEntry tmpGeoEntry = null;
 
@@ -157,15 +154,16 @@ public class DataLoader {
                         GeoEntry geoEntry = new GeoEntry(lat, lon, 12, timestamp);
 
                         //System.out.println("The geohash is: "+geoEntry.geoHash);
+                        System.out.println("Counter: "+counter);
                         cache.put(geoEntry, strLine);
 
-                        Thread.sleep(2000);
+                        Thread.sleep(1000);
 
 
 
-                        if(counter == 150000){
+                        if(counter > 1500){
                             //System.out.println("Entered.");
-                            tmpGeoEntry = geoEntry;
+                            break;
                         }
 
 
@@ -249,10 +247,64 @@ public class DataLoader {
                     }
                 }
             }
-
-        //System.out.println("The value of counter is: "+counter);
+        System.out.println("The value of counter is: "+counter);
         //System.out.println("The sum is: "+sum);
-        ClusterMetrics clusterMetrics= ignite.cluster().metrics();
+
+        //Thread.sleep(20000);
+
+        System.out.println("Repartition wait!");
+
+        int l=0;
+        System.out.println("The number of elements in 330 partition is: "+cache.localSizeLong(330, CachePeekMode.ALL));
+        System.out.println("The number of elements in 1042 partition is: "+cache.localSizeLong(1042, CachePeekMode.ALL));
+        CacheConfiguration tmpCacheConfiguration = new CacheConfiguration("TMP-CACHE");
+        tmpCacheConfiguration.setCacheMode(CacheMode.LOCAL);
+        IgniteCache<GeoEntry, String> tmpCache = ignite.createCache(tmpCacheConfiguration);
+
+        Iterator<Cache.Entry<GeoEntry, String>> itr = cache.localEntries(CachePeekMode.OFFHEAP).iterator();
+        while(itr.hasNext()){
+
+            Cache.Entry<GeoEntry, String> e = itr.next();
+            //System.out.println(""+l+ "The local entry is: "+e.getKey());
+            tmpCache.put(e.getKey(), e.getValue());
+
+            Thread.sleep(1000);
+            System.out.println(cache.remove(e.getKey()));
+            //l++;
+        }
+
+
+
+//        cache.removeAll();
+
+        Thread.sleep(20000);
+        System.out.println("Repartition starts!");
+
+        Iterator<Cache.Entry<GeoEntry, String>> tmpItr = tmpCache.localEntries(CachePeekMode.OFFHEAP).iterator();
+        while(tmpItr.hasNext()){
+
+            Cache.Entry<GeoEntry, String> tmpElem = tmpItr.next();
+            cache.put(tmpElem.getKey(), tmpElem.getValue());
+            tmpCache.remove(tmpElem.getKey());
+
+            Thread.sleep(1000);
+            //cache.put(e.getKey(), e.getValue());
+            //l++;
+        }
+        //tmpCache.destroy();
+
+
+
+
+        System.out.println("The number of elements in 330 partition is: "+cache.localSizeLong(330, CachePeekMode.ALL));
+        System.out.println("The number of elements in 1042 partition is: "+cache.localSizeLong(1042, CachePeekMode.ALL));
+
+
+
+
+
+
+       /* ClusterMetrics clusterMetrics= ignite.cluster().metrics();
         Object key = tmpGeoEntry.subGeoHash;
 
 
@@ -287,7 +339,7 @@ public class DataLoader {
                 },
                 10000000
         );
-
+*/
 
 
         /*Collection<ClusterNode> lst = affinity.mapKeyToPrimaryAndBackups(key);

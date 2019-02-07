@@ -97,7 +97,7 @@ public class SortMapUsingValue {
             return;
         }
 
-        for(int j = 0; j< base32.length; j++){
+        /*for(int j = 0; j< base32.length; j++){
 
             String tmpHotKey = "bbk";
 
@@ -135,7 +135,7 @@ public class SortMapUsingValue {
             System.out.println("Class not found");
             c.printStackTrace();
             return;
-        }
+        }*/
         Set set = map.entrySet();
         Iterator iterator = set.iterator();
         while(iterator.hasNext()) {
