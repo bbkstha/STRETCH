@@ -88,7 +88,7 @@ public class ClusterMasterZ {
             put("role", "master");
             put("donated","no");
             put("region-max", "750");
-            put("split","no");
+            put("split","yes");
             put("keyToSplit","bb");
             put("partitionToSplit","330");
             put("map","./hashmap.ser");
@@ -106,29 +106,7 @@ public class ClusterMasterZ {
             //IgniteMessaging mastersMessanger = ignite.message(masterGroup);
             //Map<UUID, Object> offerReceived = new HashMap<>();
 
-        ignite.compute(ignite.cluster().forAttribute("role","master").forRemotes()).apply(
-                new IgniteClosure<Integer, Integer>() {
-                    @Override
-                    public Integer apply(Integer x) {
 
-                        IgniteCache<DataLoader.GeoEntry, String> localCache = ignite.cache(cacheName);
-                        Iterator<Cache.Entry<DataLoader.GeoEntry, String>> it = localCache.localEntries(CachePeekMode.OFFHEAP).iterator();
-                        int i=0;
-                        while(it.hasNext()){
-                            i++;
-                            Cache.Entry<DataLoader.GeoEntry, String> e = it.next();
-                            System.out.println(""+i+". "+e.getKey()+" and value: "+e.getValue());
-
-                        }
-
-                        System.out.println(i);
-
-
-                        return 1;
-                    }
-                },
-                1
-        );
 
 
 /*            //All other listeners here!!

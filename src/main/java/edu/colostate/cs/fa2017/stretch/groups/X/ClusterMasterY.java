@@ -1,21 +1,22 @@
 package edu.colostate.cs.fa2017.stretch.groups.X;
 
-import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunction;
-import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionX;
-import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionXX;
+
 import org.apache.ignite.Ignite;
+import org.apache.ignite.IgniteCache;
 import org.apache.ignite.IgniteMessaging;
 import org.apache.ignite.Ignition;
 import org.apache.ignite.cache.CacheMode;
+import org.apache.ignite.cache.CachePeekMode;
 import org.apache.ignite.cache.CacheRebalanceMode;
+import org.apache.ignite.cache.query.ScanQuery;
 import org.apache.ignite.cluster.ClusterGroup;
-import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.DataRegionConfiguration;
 import org.apache.ignite.configuration.DataStorageConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
-import org.apache.ignite.lang.IgniteBiPredicate;
+import org.apache.ignite.lang.IgniteClosure;
 
+import javax.cache.Cache;
 import java.util.*;
 
 public class ClusterMasterY {
@@ -69,15 +70,15 @@ public class ClusterMasterY {
             put("role", "master");
             put("donated","no");
             put("region-max", "500");
-            put("split","yes");
+            put("split","no");
             put("keyToSplit","bbk");
             put("partitionToSplit","1042");
-            put("map","./hashmap1.ser");
+            put("map","./hashmap.ser");
 
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setUserAttributes(userAtt);
-        igniteConfiguration.setClientMode(false);
+        igniteConfiguration.setClientMode(true);
         igniteConfiguration.setRebalanceThreadPoolSize(4);
 
 
@@ -89,7 +90,82 @@ public class ClusterMasterY {
             IgniteMessaging mastersMessanger = ignite.message(masterGroup);
             Map<UUID, Object> offerReceived = new HashMap<>();
 
+        ignite.compute(ignite.cluster().forAttribute("role","master").forRemotes()).apply(
+                new IgniteClosure<Integer, Integer>() {
+                    @Override
+                    public Integer apply(Integer x) {
 
+                        String arg = "47.76976,-139.85048,1388538000000";
+
+                        CacheConfiguration tmpCacheConfiguration = new CacheConfiguration("TMP-CACHE");
+                        tmpCacheConfiguration.setCacheMode(CacheMode.LOCAL);
+                        IgniteCache<DataLoader.GeoEntry, String> tmpCache = ignite.createCache(tmpCacheConfiguration);
+                        DataLoader.GeoEntry testKey = new DataLoader.GeoEntry(Double.parseDouble("47.76976"), Double.parseDouble("-139.85048"),12,"1388538000000");
+
+                        int prevPart = ignite.affinity(cacheName).partition(testKey);
+                        System.out.println("Previous partition ID is: "+prevPart);
+
+                        IgniteCache<DataLoader.GeoEntry, String> localCache = ignite.cache(cacheName);
+
+                        Iterator<Cache.Entry<DataLoader.GeoEntry, String>> it = localCache.localEntries(CachePeekMode.OFFHEAP).iterator();
+                        int i=0;
+                        while(it.hasNext()){
+                            i++;
+                            Cache.Entry<DataLoader.GeoEntry, String> e = it.next();
+                            System.out.println("FROM ANOTHER: "+i);
+                            tmpCache.put(e.getKey(), e.getValue());
+                            System.out.println(localCache.remove(e.getKey()));
+                            System.out.println(""+i+". "+e.getKey()+" and value: "+e.getValue());
+                            try {
+                                Thread.sleep(1);
+                            } catch (InterruptedException e1) {
+                                e1.printStackTrace();
+                            }
+                        }
+                        boolean flag = true;
+
+                        while(flag){
+                            System.out.println("New partition ID is: "+ignite.affinity(cacheName).partition(testKey));
+                            try {
+                                Thread.sleep(5000);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            if(ignite.affinity(cacheName).partition(testKey) !=prevPart){
+                                System.out.println("New partition ID is: "+ignite.affinity(cacheName).partition(testKey));
+                                flag = false;
+                                System.out.println(flag);
+                            }
+                        }
+
+                        Iterator<Cache.Entry<DataLoader.GeoEntry, String>> itr = tmpCache.localEntries(CachePeekMode.OFFHEAP).iterator();
+                        while(itr.hasNext()) {
+
+                            Cache.Entry<DataLoader.GeoEntry, String> e = itr.next();
+                            localCache.put(e.getKey(), e.getValue());
+                            tmpCache.remove(e.getKey());
+                        }
+
+
+                        ScanQuery scanQuery = new ScanQuery();
+                        scanQuery.setPartition(prevPart);
+                        // Execute the query.
+                        Iterator<Cache.Entry<DataLoader.GeoEntry, String>> iterator1 = localCache.query(scanQuery).iterator();
+                        int c1 = 0;
+                        while (iterator1.hasNext()) {
+                            Cache.Entry<DataLoader.GeoEntry, String> remainder = iterator1.next();
+                            //System.out.println("The remaining key in 330 is: "+x.getKey());
+                            localCache.put(remainder.getKey(), remainder.getValue());
+                            c1++;
+                        }
+                        System.out.println(c1);
+
+
+                        return 1;
+                    }
+                },
+                330
+        );
 /*
             //All other listeners here!!
 

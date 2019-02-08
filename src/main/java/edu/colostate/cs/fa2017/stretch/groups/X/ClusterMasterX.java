@@ -7,6 +7,7 @@ import org.apache.ignite.cache.CacheEntry;
 import org.apache.ignite.cache.CacheMode;
 import org.apache.ignite.cache.CachePeekMode;
 import org.apache.ignite.cache.CacheRebalanceMode;
+import org.apache.ignite.cache.query.ScanQuery;
 import org.apache.ignite.cluster.ClusterGroup;
 import org.apache.ignite.cluster.ClusterMetrics;
 import org.apache.ignite.cluster.ClusterNode;
@@ -17,7 +18,10 @@ import org.apache.ignite.configuration.IgniteConfiguration;
 import org.apache.ignite.internal.IgniteInterruptedCheckedException;
 import org.apache.ignite.lang.IgniteBiPredicate;
 import org.apache.ignite.lang.IgniteClosure;
+import scala.reflect.internal.Trees;
 
+import javax.cache.Cache;
+import java.io.*;
 import java.util.*;
 
 import static org.apache.ignite.internal.util.IgniteUtils.*;
@@ -27,6 +31,7 @@ public class ClusterMasterX {
     private static final String cacheName = "STRETCH-CACHE";
 
     private static final String configTemplate = "/s/chopin/b/grad/bbkstha/IdeaProjects/IgniteExamples/config/group/X/ClusteWorkerTemplate.xml";
+    private static final String configTemplatePartitionSplit = "/s/chopin/b/grad/bbkstha/IdeaProjects/IgniteExamples/config/group/X/ClusteWorkerPowerLawTemplate.xml";
 
     private static final String RESOURCE_MONITOR = "Resource_Monitor";
     private static final String REQUEST_TOPIC = "Resource_Requested";
@@ -343,41 +348,242 @@ public class ClusterMasterX {
                                     int[] localParts = ignite.affinity(cacheName).allPartitions(ignite.cluster().forNode(c).node());
 
 
-                                    String remoteDataRegionMetrics = ignite.compute(ignite.cluster().forNode(c)).apply(
-                                            new IgniteClosure<Integer, String>() {
+                                    Map<Integer, Long> partIDToKeyCount  = ignite.compute(ignite.cluster().forNode(c)).apply(
+                                            new IgniteClosure<Integer, Map<Integer, Long>>() {
                                                 @Override
-                                                public String apply(Integer x) {
+                                                public Map<Integer, Long> apply(Integer x) {
 
                                                     DataRegionMetrics dM = ignite.dataRegionMetrics(dataRegionName);
 
                                                     ClusterMetrics metrics = ignite.cluster().localNode().metrics();
-
+                                                    Map<Integer, Long> partitionToKeyCount = new HashMap<>();
                                                     long keysCountInPartition = 0;
                                                     for (int i = 0; i < localParts.length; i++) {
                                                         //System.out.println(cacheName);
+                                                        partitionToKeyCount.put(i, ignite.cache(cacheName).localSizeLong(localParts[i], CachePeekMode.PRIMARY));
                                                         keysCountInPartition += ignite.cache(cacheName).localSizeLong(localParts[i], CachePeekMode.PRIMARY);
                                                     }
+                                                    partitionToKeyCount.put(-1, keysCountInPartition);
+                                                    partitionToKeyCount.put(-2, (long) metrics.getCurrentCpuLoad() * 100000);
 
+                                                    return partitionToKeyCount;
                                                     //System.out.println("The size from coutn is: "+(keysCountInPartition * 697.05/(1024*1024)));
                                                     //System.out.println("MEM PAGES: "+(dM.getPhysicalMemoryPages() * 4 / (double) 1024));
-                                                    String stat = "" + (keysCountInPartition * 697.05 / (double) (1024 * 1024)) + ","
+/*                                                    String stat = "" + (keysCountInPartition * 697.05 / (double) (1024 * 1024)) + ","
                                                             + metrics.getCurrentCpuLoad() + "," + (dM.getPhysicalMemoryPages() * 4 / (double) 1024);
-
-                                                    return stat;
+                                                    return stat;*/
                                                 }
                                             },
                                             1
                                     );
+                                    //remoteDataRegionMetrics
                                     double maxMemoryAllocated = Double.parseDouble(ignite.cluster().localNode().attribute("region-max")); //In MB
                                     //System.out.println("Region max: "+maxMemoryAllocated);
                                     //System.out.println("Used : "+remoteDataRegionMetrics.split(",")[0]);
-
-                                    double usage = Double.parseDouble(remoteDataRegionMetrics.split(",")[0]) / maxMemoryAllocated;
+                                    long totalKeyCount = partIDToKeyCount.get(-1);
+                                    double totalUsedMemory = (totalKeyCount * 697.05/(double) (1024 * 1024));
+                                    double usage = totalUsedMemory / maxMemoryAllocated;
                                     double rate = usage / (double) (System.currentTimeMillis() - startTimeInMilli);
-
-                                    double cpu = Double.parseDouble(remoteDataRegionMetrics.split(",")[1]);
-
+                                    double cpu = partIDToKeyCount.get(-2) / (double) 100000.0 ;
                                     System.out.println("The CPU usage is: "+cpu+" and used memory is "+usage * maxMemoryAllocated);
+
+
+                                    //Remove the -1 and -2 key
+                                    partIDToKeyCount.remove(-1);
+                                    partIDToKeyCount.remove(-2);
+                                    LinkedHashMap<Integer, Long> partIDToKeyCountReverse = new LinkedHashMap<>();
+                                    partIDToKeyCount.entrySet().stream().sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
+                                            .forEachOrdered(x -> partIDToKeyCountReverse.put(x.getKey(), x.getValue()));
+
+                                    //Power Law Distribution
+                                    int sizeOfMap = partIDToKeyCountReverse.size();
+                                    int upper20 = (int) Math.ceil(sizeOfMap/ 5.0);
+                                    long usage80 = totalKeyCount * 4/5;
+                                    String skewedPartitons = "";
+                                    for (Map.Entry<Integer, Long> d : partIDToKeyCountReverse.entrySet()) {
+                                        usage80-=d.getValue();
+                                        skewedPartitons += d.getKey()+",";
+                                        upper20--;
+                                        if(upper20 < 1 || usage80<=0){
+                                            break;
+                                        }
+                                    }
+
+
+                                    //20% of partitions are holding 80%+ keys.
+                                    //Need to split the partitions
+                                    if(usage80<=0){
+
+                                        String path = "/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-2.7.0-bin/STRETCH/KeyToPartitionMap";
+                                        char[] base32 = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'b', 'c', 'd', 'e', 'f',
+                                                'g', 'h', 'j', 'k', 'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z' };
+                                        Map<String, Integer > keyToPartitionMap = new TreeMap<>();
+
+                                        File oldFile = new File(path);
+                                        if(!oldFile.isFile()){
+                                            System.out.println("OLD FILE DOESN'T EXIST");
+                                            for(int i=0; i< base32.length; i++){
+                                                for(int j = 0; j< base32.length; j++){
+                                                    String tmp = Character.toString(base32[i]);
+                                                    tmp+=Character.toString(base32[j]);
+                                                    keyToPartitionMap.put(tmp,(32*i)+j);
+                                                }
+                                            }
+                                        }else {
+
+
+
+                                            try
+                                            {
+                                                FileInputStream fis = new FileInputStream(path);
+                                                ObjectInputStream ois = new ObjectInputStream(fis);
+                                                keyToPartitionMap = (TreeMap) ois.readObject();
+                                                ois.close();
+                                                fis.close();
+                                            }catch(IOException ioe)
+                                            {
+                                                ioe.printStackTrace();
+                                            }catch(ClassNotFoundException cf)
+                                            {
+                                                System.out.println("Class not found");
+                                                cf.printStackTrace();
+                                            }
+                                        }
+
+                                        String[] skewedPart = skewedPartitons.split(",");
+                                        String skewedKeys = "";
+                                        for(int index=0; index < skewedPart.length; index++){
+                                            for(Iterator iter = keyToPartitionMap.entrySet().iterator(); iter.hasNext();) {
+                                                Map.Entry e = (Map.Entry) iter.next();
+                                                if (skewedPart[index].equals(e.getValue())) {
+                                                    skewedKeys+=e.getKey()+",";
+                                                }
+                                            }
+                                        }
+                                        String[] eachSkewedKeys = skewedKeys.split(",");
+                                        for(int index=0; index < eachSkewedKeys.length; index++){
+                                            int sizeOfKeyToPartitionMap = ((TreeMap<String,Integer>) keyToPartitionMap).lastEntry().getValue() + 1;
+                                            for(int j = 0; j< base32.length; j++){
+                                                String tmpHotKey = eachSkewedKeys[index];
+                                                tmpHotKey+=Character.toString(base32[j]);
+                                                keyToPartitionMap.put(tmpHotKey,(sizeOfKeyToPartitionMap+j));
+                                            }
+                                            keyToPartitionMap.remove(eachSkewedKeys[index]);
+                                        }
+
+
+                                        File oldFile1 = new File(path);
+                                        if(oldFile1.isFile()){
+                                            oldFile1.delete();
+                                        }
+                                        try
+                                        {
+                                            FileOutputStream fos =
+                                                    new FileOutputStream(path);
+                                            ObjectOutputStream oos = new ObjectOutputStream(fos);
+                                            oos.writeObject(keyToPartitionMap);
+                                            oos.close();
+                                            fos.close();
+                                            System.out.printf("Serialized HashMap data is saved in hashmap.ser");
+                                        }catch(IOException ioe)
+                                        {
+                                            ioe.printStackTrace();
+                                        }
+
+                                        //Create tmp-cache to move data from hot partition to be split next
+                                        CacheConfiguration tmpCacheConfiguration = new CacheConfiguration("TMP-CACHE");
+                                        tmpCacheConfiguration.setCacheMode(CacheMode.LOCAL);
+                                        IgniteCache<DataLoader.GeoEntry, String> tmpCache = ignite.createCache(tmpCacheConfiguration);
+                                        int prevPart = -1;
+                                        DataLoader.GeoEntry testKey = new DataLoader.GeoEntry();
+                                        //System.out.println("Previous partition ID is: "+prevPart);
+                                        IgniteCache<DataLoader.GeoEntry, String> localCache = ignite.cache(cacheName);
+                                        Iterator<Cache.Entry<DataLoader.GeoEntry, String>> it = localCache.localEntries(CachePeekMode.OFFHEAP).iterator();
+                                        int i=0;
+                                        while(it.hasNext()){
+                                            i++;
+                                            Cache.Entry<DataLoader.GeoEntry, String> e = it.next();
+                                            if(prevPart==-1){
+                                                int tmpPart = ignite.affinity(cacheName).partition(e.getKey());
+                                                for(int index=0; index < skewedPart.length; index++){
+                                                    if(tmpPart == Integer.parseInt(skewedPart[index])){
+                                                        prevPart = tmpPart;
+                                                        testKey = e.getKey();
+                                                    }
+                                                }
+                                           }
+                                            System.out.println("FROM ANOTHER: "+i);
+                                            tmpCache.put(e.getKey(), e.getValue());
+                                            System.out.println(localCache.remove(e.getKey()));
+                                            System.out.println(""+i+". "+e.getKey()+" and value: "+e.getValue());
+                                            try {
+                                                Thread.sleep(1);
+                                            } catch (InterruptedException e1) {
+                                                e1.printStackTrace();
+                                            }
+                                        }
+
+                                        //Start faulty node to update keyToPartitionMap
+                                        String myHostName = ignite.cluster().localNode().hostNames().iterator().next();
+                                        String group = ignite.cluster().localNode().attribute("group");
+                                        String placeHolder = "_GROUP-NAME_" + "##" + "_DONATED_" + "##" + "_SPLIT-PARTITION_" + "_PATH_";
+                                        //System.out.println(hotPartitions);
+                                        String replacement = group + "##" + "no" +"##"+"yes" + path;
+                                        FileEditor fileEditor = new FileEditor(configTemplatePartitionSplit, placeHolder, replacement, group);
+                                        String configPath1 = fileEditor.replace();
+
+                                        Collection<Map<String, Object>> hostConfig = new ArrayList<>();
+                                        Map<String, Object> tmpMap = new HashMap<String, Object>() {{
+                                            put("host", myHostName);
+                                            put("uname", "bbkstha");
+                                            put("passwd", "Bibek2753");
+                                            put("cfg", configPath1);
+                                            put("nodes", 2);
+                                        }};
+                                        hostConfig.add(tmpMap);
+                                        Map<String, Object> dflts = null;
+                                        System.out.println("Starting partition split node!!!!!");
+                                        ignite.cluster().startNodes(hostConfig, dflts, false, 10000, 2);
+
+
+                                        //Now wait until partition split is apparent
+                                        boolean flag = true;
+                                        while(flag){
+                                            System.out.println("New partition ID is: "+ignite.affinity(cacheName).partition(testKey));
+                                            try {
+                                                Thread.sleep(1000);
+                                            } catch (InterruptedException e) {
+                                                e.printStackTrace();
+                                            }
+                                            if(ignite.affinity(cacheName).partition(testKey) !=prevPart){
+                                                System.out.println("New partition ID is: "+ignite.affinity(cacheName).partition(testKey));
+                                                flag = false;
+                                                System.out.println(flag);
+                                            }
+                                        }
+                                        Iterator<Cache.Entry<DataLoader.GeoEntry, String>> itr = tmpCache.localEntries(CachePeekMode.OFFHEAP).iterator();
+                                        while(itr.hasNext()) {
+                                            Cache.Entry<DataLoader.GeoEntry, String> e = itr.next();
+                                            localCache.put(e.getKey(), e.getValue());
+                                            tmpCache.remove(e.getKey());
+                                        }
+                                        for(int index = 0; index < skewedPart.length; index++) {
+                                            ScanQuery scanQuery = new ScanQuery();
+                                            scanQuery.setPartition(Integer.parseInt(skewedPart[index]));
+                                            // Execute the query.
+                                            Iterator<Cache.Entry<DataLoader.GeoEntry, String>> iterator1 = localCache.query(scanQuery).iterator();
+                                            int c1 = 0;
+                                            while (iterator1.hasNext()) {
+                                                Cache.Entry<DataLoader.GeoEntry, String> remainder = iterator1.next();
+                                                //System.out.println("The remaining key in 330 is: "+x.getKey());
+                                                localCache.put(remainder.getKey(), remainder.getValue());
+                                                c1++;
+                                            }
+                                        }
+                                        return true;
+                                    }
+
+
 
                                     boolean flag1 = true;
                                     while (flag1) {
@@ -398,13 +604,15 @@ public class ClusterMasterX {
                                         }
                                     }
                                 }
+
+
                                 double maxMemoryUsed = ((TreeMap<Double, UUID>) offheapUsage).lastEntry().getKey();
                                 UUID maxMemoryUsedID = ((TreeMap<Double, UUID>) offheapUsage).lastEntry().getValue();
                                 double maxCpuUsed = ((TreeMap<Double, UUID>) cpuUsage).lastEntry().getKey();
                                 UUID maxCpuUsedID = ((TreeMap<Double, UUID>) cpuUsage).lastEntry().getValue();
 
 
-                                if (maxMemoryUsed > 0.8 && !alreadyRequested) {
+                                if ((maxMemoryUsed > 0.8 || maxCpuUsed > 0.8) && !alreadyRequested) {
 
                                     System.out.println("I am group: " + groupName + " and I reached a hotspot.And my memory util is: " + maxMemoryUsed*500);
                                     String cause = "";
@@ -491,8 +699,6 @@ public class ClusterMasterX {
                                             System.out.println("Amount to transfer: " + amountToTransfer + " has surpassed threshold: " + threshold);
                                             break;
                                         }
-
-
                                     }
 
 

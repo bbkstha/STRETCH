@@ -330,7 +330,7 @@ public class GeoHashAsKey {
          */
         @Override
         public String toString() {
-            return "GeoHash is: " + geoHash + " & subGeoHash is: " + subGeoHash;
+            return "GeoHash is: " + geoHash + " & subGeoHash is: " + subGeoHash ;
         }
 
     }

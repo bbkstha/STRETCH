@@ -91,7 +91,7 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
     private static final Comparator<IgniteBiTuple<Long, ClusterNode>> COMPARATOR = new HashComparator();
 
     /** Number of partitions. */
-    private int parts;
+    private int parts = 1024+32;
 
     /** Mask to use in calculation when partitions count is power of 2. */
     private int mask = -1;
@@ -473,7 +473,7 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
                     "Make sure that an affinity key that is used is initialized properly.");
 
 
-        System.out.println("My partitions: "+ignite.affinity("STRETCH-CACHE").allPartitions(ignite.cluster().localNode()).length);
+        //System.out.println("My partitions: "+ignite.affinity("STRETCH-CACHE").allPartitions(ignite.cluster().localNode()).length);
 
         //if(ignite.affinity("STRETCH-CACHE").mapPartitionToPrimaryAndBackups(keyToPartitionMap.get(p)).isEmpty()){}
 
@@ -482,11 +482,11 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
 
 
 
-        System.out.println("Key is "+key);
+        //System.out.println("Key is "+key);
         String p = key.toString().substring(precision, precision + 2);
-        System.out.println("Portion of key is: "+p);
+        //System.out.println("Portion of key is: "+p);
         if (keyToPartitionMap.containsKey(p)) {
-            System.out.println("The key is: "+p+" and partition is: "+keyToPartitionMap.get(p));
+            //System.out.println("The key is: "+p+" and partition is: "+keyToPartitionMap.get(p));
 
 
             /*if(keyToPartitionMap.get(p)==330){
@@ -501,12 +501,12 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
 
                 p += Character.toString(key.toString().charAt(k));
                 if (keyToPartitionMap.containsKey(p)) {
-                    System.out.println("!!The key is: "+p+" and partition is: "+keyToPartitionMap.get(p));
+                    //System.out.println("!!The key is: "+p+" and partition is: "+keyToPartitionMap.get(p));
                     return keyToPartitionMap.get(p);
                 }
             }
         }
-        System.out.println("The key is: "+p+" and partition is: -1");
+       // System.out.println("The key is: "+p+" and partition is: -1");
         return -1;
     }
 

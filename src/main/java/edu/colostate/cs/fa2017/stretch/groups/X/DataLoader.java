@@ -1,23 +1,16 @@
 package edu.colostate.cs.fa2017.stretch.groups.X;
 
 import ch.hsr.geohash.GeoHash;
-import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionX;
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionXX;
 import org.apache.ignite.*;
 import org.apache.ignite.cache.*;
 import org.apache.ignite.cache.affinity.Affinity;
 import org.apache.ignite.cache.affinity.AffinityKeyMapped;
-import org.apache.ignite.cluster.ClusterGroup;
-import org.apache.ignite.cluster.ClusterMetrics;
-import org.apache.ignite.cluster.ClusterNode;
+import org.apache.ignite.cache.query.ScanQuery;
 import org.apache.ignite.configuration.CacheConfiguration;
-import org.apache.ignite.configuration.DataRegionConfiguration;
 import org.apache.ignite.configuration.DataStorageConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
-import org.apache.ignite.internal.ClusterLocalNodeMetricsMXBeanImpl;
-import org.apache.ignite.internal.processors.cache.persistence.DataRegionMetricsSnapshot;
-import org.apache.ignite.lang.IgniteClosure;
-import org.apache.ignite.mxbean.DataRegionMetricsMXBean;
+
 
 import javax.cache.Cache;
 import javax.xml.crypto.Data;
@@ -82,7 +75,7 @@ public class DataLoader {
 
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 1024+50);
+        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 1024+32);
         cacheConfiguration.setAffinity(stretchAffinityFunctionXX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
         cacheConfiguration.setStatisticsEnabled(true);
@@ -122,7 +115,7 @@ public class DataLoader {
         File[] listOfFiles = folder.listFiles();
         String strLine;
         BufferedReader bufferReader = null;
-        int counter = 1;
+        int counter = 0;
 
         GeoEntry tmpGeoEntry = null;
 
@@ -154,14 +147,14 @@ public class DataLoader {
                         GeoEntry geoEntry = new GeoEntry(lat, lon, 12, timestamp);
 
                         //System.out.println("The geohash is: "+geoEntry.geoHash);
-                        System.out.println("Counter: "+counter);
+                        //System.out.println("Counter: "+counter);
                         cache.put(geoEntry, strLine);
 
-                        Thread.sleep(1000);
+                        Thread.sleep(100);
 
 
 
-                        if(counter > 1500){
+                        if(counter > 1099){
                             //System.out.println("Entered.");
                             break;
                         }
@@ -248,13 +241,37 @@ public class DataLoader {
                 }
             }
         System.out.println("The value of counter is: "+counter);
+        System.out.println("-----------------------------------");
+
+        Thread.sleep(50000);
+
+
+        Thread.sleep(50000);
+
+        ScanQuery scanQuery = new ScanQuery();
+        scanQuery.setPartition(330);
+        // Execute the query.
+        Iterator<Cache.Entry<GeoEntry, String>> iterator = cache.query(scanQuery).iterator();
+        int c = 0;
+        while (iterator.hasNext()) {
+            System.out.println("The remaining key in 330 is: "+iterator.next().getKey());
+            c++;
+        }
+        System.out.println(c);
+
+        Thread.sleep(50000);
+
+
+
+
+
         //System.out.println("The sum is: "+sum);
 
-        //Thread.sleep(20000);
 
-        System.out.println("Repartition wait!");
 
-        int l=0;
+
+
+       /* int l=0;
         System.out.println("The number of elements in 330 partition is: "+cache.localSizeLong(330, CachePeekMode.ALL));
         System.out.println("The number of elements in 1042 partition is: "+cache.localSizeLong(1042, CachePeekMode.ALL));
         CacheConfiguration tmpCacheConfiguration = new CacheConfiguration("TMP-CACHE");
@@ -300,7 +317,7 @@ public class DataLoader {
         System.out.println("The number of elements in 1042 partition is: "+cache.localSizeLong(1042, CachePeekMode.ALL));
 
 
-
+*/
 
 
 
@@ -403,9 +420,9 @@ public class DataLoader {
 
         private String timestamp;
 
-        private GeoEntry(){}
+        public GeoEntry(){}
 
-        private GeoEntry( double lat, double lon, int upperRange, String timestamp) {
+        public GeoEntry( double lat, double lon, int upperRange, String timestamp) {
 
             this.geoHash = GeoHash.withCharacterPrecision(lat,lon, 12).toBase32();
             this.subGeoHash = this.geoHash.substring(0, upperRange);
@@ -429,7 +446,7 @@ public class DataLoader {
          */
         @Override
         public String toString() {
-            return "GeoHash is: " + geoHash + " & subGeoHash is: " + subGeoHash;
+            return "GeoHash is: " + geoHash + " & subGeoHash is: " + subGeoHash + " and timestamp: "+timestamp;
         }
 
     }
