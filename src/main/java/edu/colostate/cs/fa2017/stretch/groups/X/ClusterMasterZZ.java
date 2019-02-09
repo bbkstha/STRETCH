@@ -1,29 +1,20 @@
 package edu.colostate.cs.fa2017.stretch.groups.X;
 
-import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunction;
-import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionX;
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionXX;
 import org.apache.ignite.Ignite;
-import org.apache.ignite.IgniteCache;
-import org.apache.ignite.IgniteMessaging;
 import org.apache.ignite.Ignition;
-import org.apache.ignite.cache.CacheEntry;
 import org.apache.ignite.cache.CacheMode;
-import org.apache.ignite.cache.CachePeekMode;
 import org.apache.ignite.cache.CacheRebalanceMode;
 import org.apache.ignite.cluster.ClusterGroup;
-import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.DataRegionConfiguration;
 import org.apache.ignite.configuration.DataStorageConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
-import org.apache.ignite.lang.IgniteBiPredicate;
-import org.apache.ignite.lang.IgniteClosure;
 
-import javax.cache.Cache;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
 
-public class ClusterMasterZ {
+public class ClusterMasterZZ {
 
     private static final String cacheName = "STRETCH-CACHE";
     private static final String dataRegionName = "150MB_Region";
@@ -43,8 +34,8 @@ public class ClusterMasterZ {
         cacheConfiguration.setName(cacheName);
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 1024+32);
-        cacheConfiguration.setAffinity(stretchAffinityFunctionXX);
+       /* StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 1024+32);
+        cacheConfiguration.setAffinity(stretchAffinityFunctionXX);*/
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
 
 
@@ -86,7 +77,8 @@ public class ClusterMasterZ {
             put("role", "master");
             put("donated","no");
             put("region-max", "100");
-            put("split","no");
+            put("split","yes");
+            put("map","/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-2.7.0-bin/STRETCH/KeyToPartitionMap-X.ser");
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setUserAttributes(userAtt);

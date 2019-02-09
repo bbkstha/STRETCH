@@ -86,14 +86,14 @@ public class DataLoader {
 
         Map<String, String> userAtt = new HashMap<String, String>() {{
             put("group","loader");
-            put("role", "master");
+            put("role", "client");
             put("donated","no");
-            put("region-max", "1000");
+            put("region-max", "100");
             put("split","no");
 
         }};
         igniteConfiguration.setUserAttributes(userAtt);
-        igniteConfiguration.setClientMode(false);
+        igniteConfiguration.setClientMode(true);
 
         // Start Ignite node.
         Ignite ignite = Ignition.start(igniteConfiguration);
@@ -150,16 +150,7 @@ public class DataLoader {
                         //System.out.println("Counter: "+counter);
                         cache.put(geoEntry, strLine);
 
-                        Thread.sleep(100);
-
-
-
-                        if(counter > 1099){
-                            //System.out.println("Entered.");
-                            break;
-                        }
-
-
+                        //Thread.sleep(1);
                         //byte[] arr = ignite.configuration().getMarshaller().marshal(new GeoEntry(lat, lon, 5, timestamp));
                         //byte[] arr1 = ignite.configuration().getMarshaller().marshal(new String(strLine));
 
@@ -243,23 +234,8 @@ public class DataLoader {
         System.out.println("The value of counter is: "+counter);
         System.out.println("-----------------------------------");
 
-        Thread.sleep(50000);
 
 
-        Thread.sleep(50000);
-
-        ScanQuery scanQuery = new ScanQuery();
-        scanQuery.setPartition(330);
-        // Execute the query.
-        Iterator<Cache.Entry<GeoEntry, String>> iterator = cache.query(scanQuery).iterator();
-        int c = 0;
-        while (iterator.hasNext()) {
-            System.out.println("The remaining key in 330 is: "+iterator.next().getKey());
-            c++;
-        }
-        System.out.println(c);
-
-        Thread.sleep(50000);
 
 
 

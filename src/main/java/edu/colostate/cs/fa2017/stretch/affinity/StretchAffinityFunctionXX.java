@@ -32,10 +32,10 @@ import org.apache.ignite.resources.IgniteInstanceResource;
 import org.apache.ignite.resources.LoggerResource;
 import org.jetbrains.annotations.Nullable;
 
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.Serializable;
+import java.io.*;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.util.*;
 
 /**
@@ -512,6 +512,7 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
 
     /** {@inheritDoc} */
     @Override public List<List<ClusterNode>> assignPartitions(AffinityFunctionContext affCtx) {
+
         System.out.println("Hello");
 
         List<List<ClusterNode>> assignments = new ArrayList<>(parts);
@@ -588,14 +589,14 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
 
         if(splitCall.equalsIgnoreCase("yes")){
 
-            String hotKey = newlyJoinedNode.attribute("keyToSplit");
+            //String hotKey = newlyJoinedNode.attribute("keyToSplit");
 
-            splitPartition = Integer.parseInt(newlyJoinedNode.attribute("partitionToSplit"));
-            String path = newlyJoinedNode.attribute("map");
+            //splitPartition = Integer.parseInt(newlyJoinedNode.attribute("partitionToSplit"));
+           String path = newlyJoinedNode.attribute("map");
 
-            int hotParttion = keyToPartitionMap.get(hotKey);
+            //int hotParttion = keyToPartitionMap.get(hotKey);
 
-            System.out.println("HOt partition is: "+hotParttion);
+            //System.out.println("HOt partition is: "+hotParttion);
             int previousSize = keyToPartitionMap.size();
 
             //String tmp = Character.toString(base32[i]);
@@ -607,50 +608,35 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
                 keyToPartitionMap.put(tmpHotKey,previousSize+j);
             }*/
 
-            HashMap<String, Integer> map = null;
-            try{
-                FileInputStream fis = new FileInputStream(path);
-                ObjectInputStream ois = new ObjectInputStream(fis);
-                map = (HashMap) ois.readObject();
-                ois.close();
-                fis.close();
+            Map<String, Integer> map = new HashMap<>();
 
-        }catch(IOException ioe)
-        {
-            ioe.printStackTrace();
-        }catch(ClassNotFoundException c)
-        {
-            System.out.println("Class not found");
-            c.printStackTrace();
-        }
-
+            try {
+                FileChannel channel1 = new RandomAccessFile(path, "rw").getChannel();
+                FileLock lock = channel1.lock(); //Lock the file. Block until release the lock
+                System.out.println("LOCKED IN AF.");
+                ObjectInputStream ois = new ObjectInputStream(Channels.newInputStream(channel1));
+                map = (HashMap<String, Integer>) ois.readObject();
+                System.out.println("UNLOCKED IN AF.");
                 keyToPartitionMap = map;
-
-
+                lock.release();
+                ois.close();
+                channel1.close();
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (ClassNotFoundException e) {
+                e.printStackTrace();
+            }
             System.out.println("Size of map is: "+keyToPartitionMap.size());
             //System.out.println("Hot key is: "+hotKey);
             //System.out.println("Hot key removed with value: "+keyToPartitionMap.remove(hotKey));
-
             System.out.println("Size of map is: "+keyToPartitionMap.size());
-
         }
-
-
         //parts = keyToPartitionMap.size();
-
         System.out.println("The size of parts is: "+parts);
-
-
-
-
-
-
-
         List<ClusterNode> newList = new ArrayList<>();
         //newList.add(newlyJoinedNode);
-
-
-
         int[] partitionsToMoveAscending = null;
         String causeOfHotspot = "M";
 

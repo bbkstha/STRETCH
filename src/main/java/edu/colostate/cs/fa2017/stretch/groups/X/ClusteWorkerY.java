@@ -6,7 +6,7 @@ import org.apache.ignite.Ignition;
 
 public class ClusteWorkerY {
 
-    private static final String configTemplate = "/s/chopin/b/grad/bbkstha/IdeaProjects/IgniteExamples/config/group/X/ClusteWorkerTemplate.xml";
+    private static final String configTemplate = "/s/chopin/b/grad/bbkstha/IdeaProjects/IgniteExamples/config/group/X/ClusterWorkerTemplate.xml";
 
     public static void main(String[] args){
 

@@ -1,6 +1,8 @@
 package edu.colostate.cs.fa2017.stretch.groups.X;
 
+import com.sun.tools.corba.se.idl.InterfaceGen;
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionX;
+import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionXX;
 import edu.colostate.cs.fa2017.stretch.util.FileEditor;
 import org.apache.ignite.*;
 import org.apache.ignite.cache.CacheEntry;
@@ -22,6 +24,9 @@ import scala.reflect.internal.Trees;
 
 import javax.cache.Cache;
 import java.io.*;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.util.*;
 
 import static org.apache.ignite.internal.util.IgniteUtils.*;
@@ -30,8 +35,8 @@ public class ClusterMasterX {
 
     private static final String cacheName = "STRETCH-CACHE";
 
-    private static final String configTemplate = "/s/chopin/b/grad/bbkstha/IdeaProjects/IgniteExamples/config/group/X/ClusteWorkerTemplate.xml";
-    private static final String configTemplatePartitionSplit = "/s/chopin/b/grad/bbkstha/IdeaProjects/IgniteExamples/config/group/X/ClusteWorkerPowerLawTemplate.xml";
+    private static final String configTemplate = "/s/chopin/b/grad/bbkstha/IdeaProjects/IgniteExamples/config/group/X/ClusterWorkerTemplate.xml";
+    private static final String configTemplatePartitionSplit = "/s/chopin/b/grad/bbkstha/IdeaProjects/IgniteExamples/config/group/X/ClusterWorkerPowerLawTemplate.xml";
 
     private static final String RESOURCE_MONITOR = "Resource_Monitor";
     private static final String REQUEST_TOPIC = "Resource_Requested";
@@ -58,8 +63,8 @@ public class ClusterMasterX {
         cacheConfiguration.setName(cacheName);
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionX stretchAffinityFunctionX = new StretchAffinityFunctionX(false, 1024);
-        cacheConfiguration.setAffinity(stretchAffinityFunctionX);
+        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 1024+32);
+        cacheConfiguration.setAffinity(stretchAffinityFunctionXX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
         cacheConfiguration.setOnheapCacheEnabled(false);
 
@@ -88,7 +93,8 @@ public class ClusterMasterX {
             put("group",groupName);
             put("role", "master");
             put("donated","no");
-            put("region-max", "500");
+            put("split","no");
+            put("region-max", "100");
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setUserAttributes(userAtt);
@@ -322,314 +328,327 @@ public class ClusterMasterX {
                         @Override
                         public boolean apply(UUID nodeId, Object msg) {
 
-
                             long startTimeInMilli = System.currentTimeMillis();
-
-
-
                             //System.out.println("Alreadyrequested Status: "+alreadyRequested);
 
-                            if(!alreadyRequested) {
-                                //System.out.println("I am monitoring "+ignite.cluster().localNode().attribute("group"));
 
+                            String groupName = ignite.cluster().localNode().attribute("group");
+                            ClusterGroup clusterGroup = ignite.cluster().forAttribute("group", groupName);
+                            Map<Double, UUID> offheapUsage = new TreeMap<>();
+                            Map<Double, UUID> cpuUsage = new TreeMap<>();
+                                //Map<Double, UUID> growthRate = new TreeMap<>();
 
+                            Map<UUID, Boolean> partitionSplitOngoing = new HashMap<>();
 
-                                //System.out.println("Entered monitoring part!!");
-
-                                String groupName = ignite.cluster().localNode().attribute("group");
-                                ClusterGroup clusterGroup = ignite.cluster().forAttribute("group", groupName);
-                                Map<Double, UUID> offheapUsage = new TreeMap<>();
-                                Map<Double, UUID> cpuUsage = new TreeMap<>();
-                                Map<Double, UUID> growthRate = new TreeMap<>();
-
+                            //System.out.println("I am monitoring "+ignite.cluster().localNode().attribute("group")+"Workers Count:"+clusterGroup.nodes().size());
                                 //Subcluster nodes usage stats collector
-                                for (ClusterNode c : clusterGroup.nodes()) {
-
-                                    int[] localParts = ignite.affinity(cacheName).allPartitions(ignite.cluster().forNode(c).node());
-
-
-                                    Map<Integer, Long> partIDToKeyCount  = ignite.compute(ignite.cluster().forNode(c)).apply(
-                                            new IgniteClosure<Integer, Map<Integer, Long>>() {
-                                                @Override
-                                                public Map<Integer, Long> apply(Integer x) {
-
-                                                    DataRegionMetrics dM = ignite.dataRegionMetrics(dataRegionName);
-
-                                                    ClusterMetrics metrics = ignite.cluster().localNode().metrics();
-                                                    Map<Integer, Long> partitionToKeyCount = new HashMap<>();
-                                                    long keysCountInPartition = 0;
-                                                    for (int i = 0; i < localParts.length; i++) {
-                                                        //System.out.println(cacheName);
-                                                        partitionToKeyCount.put(i, ignite.cache(cacheName).localSizeLong(localParts[i], CachePeekMode.PRIMARY));
-                                                        keysCountInPartition += ignite.cache(cacheName).localSizeLong(localParts[i], CachePeekMode.PRIMARY);
-                                                    }
-                                                    partitionToKeyCount.put(-1, keysCountInPartition);
-                                                    partitionToKeyCount.put(-2, (long) metrics.getCurrentCpuLoad() * 100000);
-
-                                                    return partitionToKeyCount;
-                                                    //System.out.println("The size from coutn is: "+(keysCountInPartition * 697.05/(1024*1024)));
-                                                    //System.out.println("MEM PAGES: "+(dM.getPhysicalMemoryPages() * 4 / (double) 1024));
-/*                                                    String stat = "" + (keysCountInPartition * 697.05 / (double) (1024 * 1024)) + ","
-                                                            + metrics.getCurrentCpuLoad() + "," + (dM.getPhysicalMemoryPages() * 4 / (double) 1024);
-                                                    return stat;*/
+                            for (ClusterNode c : clusterGroup.nodes()) {
+                                int[] localParts = ignite.affinity(cacheName).allPartitions(ignite.cluster().forNode(c).node());
+                                Map<Integer, Long> partIDToKeyCount  = ignite.compute(ignite.cluster().forNode(c)).apply(
+                                        new IgniteClosure<Integer, Map<Integer, Long>>() {
+                                            @Override
+                                            public Map<Integer, Long> apply(Integer x) {
+                                                DataRegionMetrics dM = ignite.dataRegionMetrics(dataRegionName);
+                                                ClusterMetrics metrics = ignite.cluster().localNode().metrics();
+                                                Map<Integer, Long> partitionToKeyCount = new HashMap<>();
+                                                long keysCountInPartition = 0;
+                                                for (int i = 0; i < localParts.length; i++) {
+                                                    //System.out.println(cacheName);
+                                                    partitionToKeyCount.put(i, ignite.cache(cacheName).localSizeLong(localParts[i], CachePeekMode.PRIMARY));
+                                                    keysCountInPartition += ignite.cache(cacheName).localSizeLong(localParts[i], CachePeekMode.PRIMARY);
                                                 }
-                                            },
-                                            1
-                                    );
-                                    //remoteDataRegionMetrics
-                                    double maxMemoryAllocated = Double.parseDouble(ignite.cluster().localNode().attribute("region-max")); //In MB
-                                    //System.out.println("Region max: "+maxMemoryAllocated);
-                                    //System.out.println("Used : "+remoteDataRegionMetrics.split(",")[0]);
-                                    long totalKeyCount = partIDToKeyCount.get(-1);
-                                    double totalUsedMemory = (totalKeyCount * 697.05/(double) (1024 * 1024));
-                                    double usage = totalUsedMemory / maxMemoryAllocated;
-                                    double rate = usage / (double) (System.currentTimeMillis() - startTimeInMilli);
-                                    double cpu = partIDToKeyCount.get(-2) / (double) 100000.0 ;
-                                    System.out.println("The CPU usage is: "+cpu+" and used memory is "+usage * maxMemoryAllocated);
+                                                partitionToKeyCount.put(-1, keysCountInPartition);
+                                                partitionToKeyCount.put(-2, (long) metrics.getCurrentCpuLoad() * 100000);
+                                                //System.out.println("The size from count is: "+(keysCountInPartition * 697.05/(1024*1024)));
+                                                return partitionToKeyCount;
+                                                //System.out.println("MEM PAGES: "+(dM.getPhysicalMemoryPages() * 4 / (double) 1024));
+/*                                                    String stat = "" + (keysCountInPartition * 697.05 / (double) (1024 * 1024)) + ","
+                                                        + metrics.getCurrentCpuLoad() + "," + (dM.getPhysicalMemoryPages() * 4 / (double) 1024);
+                                                return stat;*/
+                                            }
+                                        },
+                                        1
+                                );
+                                //remoteDataRegionMetrics
+                                double maxMemoryAllocated = Double.parseDouble(ignite.cluster().localNode().attribute("region-max")); //In MB
+                                //System.out.println("Region max: "+maxMemoryAllocated);
+                                //System.out.println("Used : "+remoteDataRegionMetrics.split(",")[0]);
+                                long totalKeyCount = partIDToKeyCount.get(-1);
+                                double totalMemoryUsed = (totalKeyCount * 697.05/(double) (1024 * 1024));
+                                double memoryUsageProp = totalMemoryUsed / maxMemoryAllocated;
+                                double rate = memoryUsageProp / (double) (System.currentTimeMillis() - startTimeInMilli);
+                                double cpuUsageProp = partIDToKeyCount.get(-2) / (double) 100000.0 ;
+                                System.out.println("The CPU usage is: "+cpuUsageProp+", memeory usage is: "+memoryUsageProp+" and used memory is "+memoryUsageProp * maxMemoryAllocated);
+                                //Remove the -1 and -2 key
+                                partIDToKeyCount.remove(-1);
+                                partIDToKeyCount.remove(-2);
+                                LinkedHashMap<Integer, Long> partIDToKeyCountReverse = new LinkedHashMap<>();
+                                partIDToKeyCount.entrySet().stream().sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
+                                        .forEachOrdered(x -> partIDToKeyCountReverse.put(x.getKey(), x.getValue()));
 
+                                //Power Law Distribution:: Test only after 40% of memory allocated is used.
+                                if(memoryUsageProp >=0.4) {
+                                    System.out.println("Power Law Test");
 
-                                    //Remove the -1 and -2 key
-                                    partIDToKeyCount.remove(-1);
-                                    partIDToKeyCount.remove(-2);
-                                    LinkedHashMap<Integer, Long> partIDToKeyCountReverse = new LinkedHashMap<>();
-                                    partIDToKeyCount.entrySet().stream().sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
-                                            .forEachOrdered(x -> partIDToKeyCountReverse.put(x.getKey(), x.getValue()));
-
-                                    //Power Law Distribution
                                     int sizeOfMap = partIDToKeyCountReverse.size();
-                                    int upper20 = (int) Math.ceil(sizeOfMap/ 5.0);
-                                    long usage80 = totalKeyCount * 4/5;
+                                    int upper20 = (int) Math.ceil(sizeOfMap / 5.0);
+                                    System.out.println("20% of partitions is: "+upper20);
+                                    long usage80 = totalKeyCount * 4 / 5;
+                                    System.out.println("80% of memory is: "+usage80);
                                     String skewedPartitons = "";
                                     for (Map.Entry<Integer, Long> d : partIDToKeyCountReverse.entrySet()) {
-                                        usage80-=d.getValue();
-                                        skewedPartitons += d.getKey()+",";
+                                        usage80 -= d.getValue();
+                                        skewedPartitons += d.getKey() + ",";
                                         upper20--;
-                                        if(upper20 < 1 || usage80<=0){
+                                        if (upper20 < 1 || usage80 <= 1500) {
+                                            System.out.println("Skewed partitions: "+skewedPartitons);
+                                            System.out.println("upper20 is:"+upper20+" and usage80 is: "+usage80);
                                             break;
                                         }
                                     }
 
-
-                                    //20% of partitions are holding 80%+ keys.
+                                    //20% of partitions are holding 80% or more keys.
                                     //Need to split the partitions
-                                    if(usage80<=0){
+                                    if (usage80 <= 1500) {
 
-                                        String path = "/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-2.7.0-bin/STRETCH/KeyToPartitionMap";
-                                        char[] base32 = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'b', 'c', 'd', 'e', 'f',
-                                                'g', 'h', 'j', 'k', 'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z' };
-                                        Map<String, Integer > keyToPartitionMap = new TreeMap<>();
-
-                                        File oldFile = new File(path);
-                                        if(!oldFile.isFile()){
-                                            System.out.println("OLD FILE DOESN'T EXIST");
-                                            for(int i=0; i< base32.length; i++){
-                                                for(int j = 0; j< base32.length; j++){
-                                                    String tmp = Character.toString(base32[i]);
-                                                    tmp+=Character.toString(base32[j]);
-                                                    keyToPartitionMap.put(tmp,(32*i)+j);
-                                                }
-                                            }
-                                        }else {
-
-
-
-                                            try
-                                            {
-                                                FileInputStream fis = new FileInputStream(path);
-                                                ObjectInputStream ois = new ObjectInputStream(fis);
-                                                keyToPartitionMap = (TreeMap) ois.readObject();
-                                                ois.close();
-                                                fis.close();
-                                            }catch(IOException ioe)
-                                            {
-                                                ioe.printStackTrace();
-                                            }catch(ClassNotFoundException cf)
-                                            {
-                                                System.out.println("Class not found");
-                                                cf.printStackTrace();
-                                            }
-                                        }
-
+                                        partitionSplitOngoing.put(c.id(), true);
                                         String[] skewedPart = skewedPartitons.split(",");
                                         String skewedKeys = "";
-                                        for(int index=0; index < skewedPart.length; index++){
-                                            for(Iterator iter = keyToPartitionMap.entrySet().iterator(); iter.hasNext();) {
-                                                Map.Entry e = (Map.Entry) iter.next();
-                                                if (skewedPart[index].equals(e.getValue())) {
-                                                    skewedKeys+=e.getKey()+",";
+                                        String path = "/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-2.7.0-bin/STRETCH/KeyToPartitionMap-"+groupName+".ser";
+                                        char[] base32 = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'b', 'c', 'd', 'e', 'f',
+                                                'g', 'h', 'j', 'k', 'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'};
+                                        Map<String, Integer> keyToPartitionMap = new HashMap<>();
+
+                                        File file = new File(path);
+                                        if (!file.isFile()) {
+                                            System.out.println("FILE DOESN'T EXIST");
+                                            for (int i = 0; i < base32.length; i++) {
+                                                for (int j = 0; j < base32.length; j++) {
+                                                    String tmp = Character.toString(base32[i]);
+                                                    tmp += Character.toString(base32[j]);
+                                                    keyToPartitionMap.put(tmp, (32 * i) + j);
                                                 }
                                             }
-                                        }
-                                        String[] eachSkewedKeys = skewedKeys.split(",");
-                                        for(int index=0; index < eachSkewedKeys.length; index++){
-                                            int sizeOfKeyToPartitionMap = ((TreeMap<String,Integer>) keyToPartitionMap).lastEntry().getValue() + 1;
-                                            for(int j = 0; j< base32.length; j++){
-                                                String tmpHotKey = eachSkewedKeys[index];
-                                                tmpHotKey+=Character.toString(base32[j]);
-                                                keyToPartitionMap.put(tmpHotKey,(sizeOfKeyToPartitionMap+j));
-                                            }
-                                            keyToPartitionMap.remove(eachSkewedKeys[index]);
-                                        }
+                                        } else {
+                                            try {
+                                                FileChannel channel1 = new RandomAccessFile(file, "rw").getChannel();
+                                                FileLock lock = channel1.lock(); //Lock the file. Block until release the lock
+                                                System.out.println("FILE LOCKED.");
+                                                Map<String, Integer> map =  new HashMap<>();
+                                                ObjectInputStream ois = new ObjectInputStream(Channels.newInputStream(channel1));
+                                                map = (HashMap<String, Integer>) ois.readObject();
+                                                lock.release(); //Release the file
+                                                System.out.println("UNLOCKED.");
+                                                ois.close();
+                                                channel1.close();
+                                                //Set set = map.entrySet();
+                                                //Iterator iterator = set.iterator();
+                                                /*while (iterator.hasNext()) {
+                                                    Map.Entry mentry = (Map.Entry) iterator.next();
+                                                    System.out.print("key: " + mentry.getKey() + " & Value: ");
+                                                    System.out.println(mentry.getValue());
+                                                }*/
+                                                keyToPartitionMap = map;
 
-
-                                        File oldFile1 = new File(path);
-                                        if(oldFile1.isFile()){
-                                            oldFile1.delete();
-                                        }
-                                        try
-                                        {
-                                            FileOutputStream fos =
-                                                    new FileOutputStream(path);
-                                            ObjectOutputStream oos = new ObjectOutputStream(fos);
-                                            oos.writeObject(keyToPartitionMap);
-                                            oos.close();
-                                            fos.close();
-                                            System.out.printf("Serialized HashMap data is saved in hashmap.ser");
-                                        }catch(IOException ioe)
-                                        {
-                                            ioe.printStackTrace();
-                                        }
-
-                                        //Create tmp-cache to move data from hot partition to be split next
-                                        CacheConfiguration tmpCacheConfiguration = new CacheConfiguration("TMP-CACHE");
-                                        tmpCacheConfiguration.setCacheMode(CacheMode.LOCAL);
-                                        IgniteCache<DataLoader.GeoEntry, String> tmpCache = ignite.createCache(tmpCacheConfiguration);
-                                        int prevPart = -1;
-                                        DataLoader.GeoEntry testKey = new DataLoader.GeoEntry();
-                                        //System.out.println("Previous partition ID is: "+prevPart);
-                                        IgniteCache<DataLoader.GeoEntry, String> localCache = ignite.cache(cacheName);
-                                        Iterator<Cache.Entry<DataLoader.GeoEntry, String>> it = localCache.localEntries(CachePeekMode.OFFHEAP).iterator();
-                                        int i=0;
-                                        while(it.hasNext()){
-                                            i++;
-                                            Cache.Entry<DataLoader.GeoEntry, String> e = it.next();
-                                            if(prevPart==-1){
-                                                int tmpPart = ignite.affinity(cacheName).partition(e.getKey());
-                                                for(int index=0; index < skewedPart.length; index++){
-                                                    if(tmpPart == Integer.parseInt(skewedPart[index])){
-                                                        prevPart = tmpPart;
-                                                        testKey = e.getKey();
+                                                for (int index = 0; index < skewedPart.length; index++) {
+                                                    for (Iterator iter = keyToPartitionMap.entrySet().iterator(); iter.hasNext(); ) {
+                                                        Map.Entry e = (Map.Entry) iter.next();
+                                                        if (skewedPart[index].equals(e.getValue())) {
+                                                            skewedKeys += e.getKey() + ",";
+                                                            System.out.println("Skewed key are: "+skewedKeys);
+                                                        }
                                                     }
                                                 }
-                                           }
-                                            System.out.println("FROM ANOTHER: "+i);
-                                            tmpCache.put(e.getKey(), e.getValue());
-                                            System.out.println(localCache.remove(e.getKey()));
-                                            System.out.println(""+i+". "+e.getKey()+" and value: "+e.getValue());
-                                            try {
-                                                Thread.sleep(1);
-                                            } catch (InterruptedException e1) {
-                                                e1.printStackTrace();
-                                            }
-                                        }
+                                                String[] eachSkewedKeys = skewedKeys.split(",");
+                                                for (int index = 0; index < eachSkewedKeys.length; index++) {
+                                                    int largestPartitionID = Collections.max(keyToPartitionMap.entrySet(), Map.Entry.comparingByValue()).getValue() + 1;
+                                                    for (int j = 0; j < base32.length; j++) {
+                                                        String tmpHotKey = eachSkewedKeys[index];
+                                                        tmpHotKey += Character.toString(base32[j]);
+                                                        keyToPartitionMap.put(tmpHotKey, (largestPartitionID + j));
+                                                    }
+                                                    keyToPartitionMap.remove(eachSkewedKeys[index]);
+                                                }
 
-                                        //Start faulty node to update keyToPartitionMap
-                                        String myHostName = ignite.cluster().localNode().hostNames().iterator().next();
-                                        String group = ignite.cluster().localNode().attribute("group");
-                                        String placeHolder = "_GROUP-NAME_" + "##" + "_DONATED_" + "##" + "_SPLIT-PARTITION_" + "_PATH_";
-                                        //System.out.println(hotPartitions);
-                                        String replacement = group + "##" + "no" +"##"+"yes" + path;
-                                        FileEditor fileEditor = new FileEditor(configTemplatePartitionSplit, placeHolder, replacement, group);
-                                        String configPath1 = fileEditor.replace();
-
-                                        Collection<Map<String, Object>> hostConfig = new ArrayList<>();
-                                        Map<String, Object> tmpMap = new HashMap<String, Object>() {{
-                                            put("host", myHostName);
-                                            put("uname", "bbkstha");
-                                            put("passwd", "Bibek2753");
-                                            put("cfg", configPath1);
-                                            put("nodes", 2);
-                                        }};
-                                        hostConfig.add(tmpMap);
-                                        Map<String, Object> dflts = null;
-                                        System.out.println("Starting partition split node!!!!!");
-                                        ignite.cluster().startNodes(hostConfig, dflts, false, 10000, 2);
-
-
-                                        //Now wait until partition split is apparent
-                                        boolean flag = true;
-                                        while(flag){
-                                            System.out.println("New partition ID is: "+ignite.affinity(cacheName).partition(testKey));
-                                            try {
-                                                Thread.sleep(1000);
-                                            } catch (InterruptedException e) {
+                                                //Save to modified KeyToPartitionMap
+                                                FileChannel channel2 = new RandomAccessFile(file, "rw").getChannel();
+                                                FileLock lock2 = channel2.lock(); //Lock the file. Block until release the lock
+                                                System.out.println("FILE LOCKED AGAIN.");
+                                                ObjectOutputStream oos = new ObjectOutputStream(Channels.newOutputStream(channel2));
+                                                oos.writeObject(keyToPartitionMap);
+                                                lock2.release(); //Release the file
+                                                System.out.println("UNLOCKED.");
+                                                oos.close();
+                                                channel2.close();
+                                            }catch (FileNotFoundException e) {
+                                                e.printStackTrace();
+                                            } catch (IOException e) {
+                                                e.printStackTrace();
+                                            } catch (ClassNotFoundException e) {
                                                 e.printStackTrace();
                                             }
-                                            if(ignite.affinity(cacheName).partition(testKey) !=prevPart){
-                                                System.out.println("New partition ID is: "+ignite.affinity(cacheName).partition(testKey));
-                                                flag = false;
-                                                System.out.println(flag);
-                                            }
                                         }
-                                        Iterator<Cache.Entry<DataLoader.GeoEntry, String>> itr = tmpCache.localEntries(CachePeekMode.OFFHEAP).iterator();
-                                        while(itr.hasNext()) {
-                                            Cache.Entry<DataLoader.GeoEntry, String> e = itr.next();
-                                            localCache.put(e.getKey(), e.getValue());
-                                            tmpCache.remove(e.getKey());
-                                        }
-                                        for(int index = 0; index < skewedPart.length; index++) {
-                                            ScanQuery scanQuery = new ScanQuery();
-                                            scanQuery.setPartition(Integer.parseInt(skewedPart[index]));
-                                            // Execute the query.
-                                            Iterator<Cache.Entry<DataLoader.GeoEntry, String>> iterator1 = localCache.query(scanQuery).iterator();
-                                            int c1 = 0;
-                                            while (iterator1.hasNext()) {
-                                                Cache.Entry<DataLoader.GeoEntry, String> remainder = iterator1.next();
-                                                //System.out.println("The remaining key in 330 is: "+x.getKey());
-                                                localCache.put(remainder.getKey(), remainder.getValue());
-                                                c1++;
-                                            }
-                                        }
-                                        return true;
-                                    }
+                                        //Start faulty node to update keyToPartitionMap at the specific worker
+                                        ignite.compute(ignite.cluster().forNode(c)).apply(
+
+                                                new IgniteClosure<Integer, Integer>() {
+                                                    @Override
+                                                    public Integer apply(Integer x) {
+
+                                                        //Create tmp-cache to move data from hot partition to be split next
+                                                        CacheConfiguration tmpCacheConfiguration = new CacheConfiguration("TMP-CACHE");
+                                                        tmpCacheConfiguration.setCacheMode(CacheMode.LOCAL);
+                                                        IgniteCache<DataLoader.GeoEntry, String> tmpCache = ignite.createCache(tmpCacheConfiguration);
+                                                        int prevPart = -1;
+                                                        DataLoader.GeoEntry testKey = new DataLoader.GeoEntry();
+                                                        //System.out.println("Previous partition ID is: "+prevPart);
+                                                        IgniteCache<DataLoader.GeoEntry, String> localCache = ignite.cache(cacheName);
+                                                        Iterator<Cache.Entry<DataLoader.GeoEntry, String>> it = localCache.localEntries(CachePeekMode.OFFHEAP).iterator();
+                                                        //int i = 0;
+                                                        while (it.hasNext()) {
+                                                            //i++;
+                                                            Cache.Entry<DataLoader.GeoEntry, String> e = it.next();
+                                                            if (prevPart == -1) {
+                                                                int tmpPart = ignite.affinity(cacheName).partition(e.getKey());
+                                                                for (int index = 0; index < skewedPart.length; index++) {
+                                                                    if (tmpPart == Integer.parseInt(skewedPart[index])) {
+                                                                        prevPart = tmpPart;
+                                                                        testKey = e.getKey();
+                                                                    }
+                                                                }
+                                                            }
+                                                            //System.out.println("FROM ANOTHER: " + i);
+                                                            tmpCache.put(e.getKey(), e.getValue());
+                                                            //System.out.println(localCache.remove(e.getKey()));
+                                                            //System.out.println("" + i + ". " + e.getKey() + " and value: " + e.getValue());
+                                                        }
+                                                        String myHostName = ignite.cluster().localNode().hostNames().iterator().next();
+                                                        String group = ignite.cluster().localNode().attribute("group");
+                                                        String placeHolder = "_GROUP-NAME_" + "##" + "_DONATED_" + "##" + "_SPLIT-PARTITION_" +"##"+ "_PATH_";
+                                                        //System.out.println(hotPartitions);
+                                                        String replacement = group + "##" + "no" + "##" + "yes" +"##"+ path;
+                                                        FileEditor fileEditor = new FileEditor(configTemplatePartitionSplit, placeHolder, replacement, group);
+                                                        String configPath1 = fileEditor.replace();
+
+                                                        Collection<Map<String, Object>> hostConfig = new ArrayList<>();
+                                                        Map<String, Object> tmpMap = new HashMap<String, Object>() {{
+                                                            put("host", myHostName);
+                                                            put("uname", "bbkstha");
+                                                            put("passwd", "Bibek2753");
+                                                            put("cfg", configPath1);
+                                                            put("nodes", 4);
+                                                        }};
+                                                        hostConfig.add(tmpMap);
+                                                        Map<String, Object> dflts = null;
+                                                        System.out.println("Starting partition split node!!!!!");
+                                                        //ignite.cluster().startNodes(hostConfig, dflts, false, 10000, 4);
+
+                                                        //Now wait until partition split is apparent
+
+                                                        try {
+                                                            Thread.sleep(15000);
+                                                        } catch (InterruptedException e) {
+                                                            e.printStackTrace();
+                                                        }
 
 
+                                                        boolean flag = true;
+                                                        /*while (flag) {
+                                                            try {
+                                                                Thread.sleep(5000);
+                                                            } catch (InterruptedException e) {
+                                                                e.printStackTrace();
+                                                            }
+                                                            System.out.println("OLD PATITION ID: "+prevPart);
+                                                            System.out.println("NEW PATITION ID: "+ignite.affinity(cacheName).partition(testKey));
 
-                                    boolean flag1 = true;
-                                    while (flag1) {
-                                        if (!offheapUsage.containsKey(usage)) {
-                                            offheapUsage.put(usage, c.id());
-                                            flag1 = false;
-                                        } else {
-                                            usage += (Math.random() % 0.00001);
-                                        }
-                                    }
-                                    boolean flag2 = true;
-                                    while (flag2) {
-                                        if (!cpuUsage.containsKey(cpu)) {
-                                            cpuUsage.put(cpu, c.id());
-                                            flag2 = false;
-                                        } else {
-                                            cpu += (Math.random() % 0.00001);
-                                        }
+                                                            if (ignite.affinity(cacheName).partition(testKey) != prevPart) {
+                                                                System.out.println("New partition ID is: " + ignite.affinity(cacheName).partition(testKey));
+                                                                flag = false;
+                                                                System.out.println(flag);
+                                                            }
+                                                        }*/
+                                                        Iterator<Cache.Entry<DataLoader.GeoEntry, String>> itr = tmpCache.localEntries(CachePeekMode.OFFHEAP).iterator();
+                                                        while (itr.hasNext()) {
+                                                            Cache.Entry<DataLoader.GeoEntry, String> e = itr.next();
+                                                            localCache.put(e.getKey(), e.getValue());
+                                                            tmpCache.remove(e.getKey());
+                                                        }
+                                                        for (int index = 0; index < skewedPart.length; index++) {
+                                                            ScanQuery scanQuery = new ScanQuery();
+                                                            scanQuery.setPartition(Integer.parseInt(skewedPart[index]));
+                                                            // Execute the query.
+                                                            Iterator<Cache.Entry<DataLoader.GeoEntry, String>> iterator1 = localCache.query(scanQuery).iterator();
+                                                            int c1 = 0;
+                                                            while (iterator1.hasNext()) {
+                                                                Cache.Entry<DataLoader.GeoEntry, String> remainder = iterator1.next();
+                                                                //System.out.println("The remaining key in 330 is: "+x.getKey());
+                                                                localCache.put(remainder.getKey(), remainder.getValue());
+                                                                c1++;
+                                                            }
+                                                        }
+                                                        return 1;
+                                                    }
+                                                },
+                                                1
+                                        );
+                                        //return true;
                                     }
                                 }
 
+                                System.out.println("Out of Power Law Test");
+
+                                boolean flag1 = true;
+                                while (flag1) {
+                                    if (!offheapUsage.containsKey(memoryUsageProp)) {
+                                        offheapUsage.put(memoryUsageProp, c.id());
+                                        flag1 = false;
+                                    } else {
+                                        memoryUsageProp += (Math.random() % 0.00001);
+                                    }
+                                }
+                                boolean flag2 = true;
+                                while (flag2) {
+                                    if (!cpuUsage.containsKey(cpuUsageProp)) {
+                                        cpuUsage.put(cpuUsageProp, c.id());
+                                        flag2 = false;
+                                    } else {
+                                        cpuUsageProp += (Math.random() % 0.00001);
+                                    }
+                                }
+                            }
+                            if(partitionSplitOngoing.size()!=0){
+                                System.out.println("Returning for testing");
+                                return true;
+
+                            }
 
                                 double maxMemoryUsed = ((TreeMap<Double, UUID>) offheapUsage).lastEntry().getKey();
                                 UUID maxMemoryUsedID = ((TreeMap<Double, UUID>) offheapUsage).lastEntry().getValue();
                                 double maxCpuUsed = ((TreeMap<Double, UUID>) cpuUsage).lastEntry().getKey();
                                 UUID maxCpuUsedID = ((TreeMap<Double, UUID>) cpuUsage).lastEntry().getValue();
+                                String cause = "";
+                                UUID hotspotNodeID = maxMemoryUsedID;
+                                boolean checker = false;
 
+                                if (maxMemoryUsedID.equals(maxCpuUsedID)) {
+                                    cause = "CM";
+                                    checker = partitionSplitOngoing.containsKey(maxMemoryUsedID);
+                                    //hotspotNodeID = maxMemoryUsedID;
+                                } else if (maxMemoryUsed > maxCpuUsed) {
+                                    cause = "M";
+                                    checker = partitionSplitOngoing.containsKey(maxMemoryUsedID);
+                                    //hotspotNodeID = maxMemoryUsedID;
+                                } else if (maxCpuUsed > maxMemoryUsed) {
+                                    cause = "C";
+                                    checker = partitionSplitOngoing.containsKey(maxCpuUsedID);
+                                    hotspotNodeID = maxCpuUsedID;
+                                }
 
-                                if ((maxMemoryUsed > 0.8 || maxCpuUsed > 0.8) && !alreadyRequested) {
+                                if ((maxMemoryUsed > 0.8 || maxCpuUsed > 0.8) && !alreadyRequested && !checker) {
 
                                     System.out.println("I am group: " + groupName + " and I reached a hotspot.And my memory util is: " + maxMemoryUsed*500);
-                                    String cause = "";
-                                    UUID hotspotNodeID = maxMemoryUsedID;
-                                    if (maxMemoryUsedID.equals(maxCpuUsedID)) {
-                                        cause = "CM";
-                                        //hotspotNodeID = maxMemoryUsedID;
-                                    } else if (maxMemoryUsed > maxCpuUsed) {
-                                        cause = "M";
-                                        //hotspotNodeID = maxMemoryUsedID;
-                                    } else if (maxCpuUsed > maxMemoryUsed) {
-                                        cause = "C";
-                                        hotspotNodeID = maxCpuUsedID;
-                                    }
-
                                     //System.out.println("Cause of hotspot: "+cause);
-
                                     //Finding hot partition
                                     int[] localParts = ignite.affinity(cacheName).allPartitions(ignite.cluster().forNodeId(hotspotNodeID).node());
                                     //System.out.println("The size of partition asssociated with hotspot node is: " + localParts.length);
@@ -656,7 +675,6 @@ public class ClusterMasterX {
                                             },
                                             1
                                     );
-
 
                                     //calculate skewness
                                     /*
@@ -711,7 +729,6 @@ public class ClusterMasterX {
                                     alreadyRequested = true;
                                     mastersMessanger.send(REQUEST_TOPIC, (Object) cause);
                                 }
-                            }
                             return true;
                         }
                     });
@@ -720,13 +737,12 @@ public class ClusterMasterX {
 
             boolean flag = true;
             while(flag){
-                if(ignite.cluster().forAttribute("role","master").nodes().size() == numberOfMastersExpected+1){
+                if(ignite.cluster().forAttribute("role","master").nodes().size() == numberOfMastersExpected){
                     //Need to wait for few seconds to let the system come to stable state
                     if(!alreadyRequested){
-
                         Thread.sleep(3000);
                         //System.out.println("NUmber of masters: "+ignite.cluster().forAttribute("role","master").nodes().size());
-                       // System.out.println("START");
+                       //System.out.println("START");
                         mastersMessanger.send(RESOURCE_MONITOR, "START");
                     }
                 }

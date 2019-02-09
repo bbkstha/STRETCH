@@ -1,6 +1,9 @@
 package edu.colostate.cs.fa2017.stretch.util;
 
 
+import org.apache.hadoop.yarn.webapp.hamlet.Hamlet;
+import scala.reflect.internal.Trees;
+
 import java.io.*;
 import java.util.*;
 
@@ -11,7 +14,7 @@ public class SortMapUsingValue {
     private static final char[] base32 = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'b', 'c', 'd', 'e', 'f',
             'g', 'h', 'j', 'k', 'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z' };
 
-    private static Map<String, Integer > keyToPartitionMap = new HashMap<>();
+    private static Map<String, Integer > keyToPartitionMap = new TreeMap<>();
 
 
     public static void main(String[] args) {
@@ -44,30 +47,29 @@ public class SortMapUsingValue {
         System.out.println("The length of partitions to move is: " + partitionToMove.substring(0, partitionToMove.length()-1).split(",").length);
 */
 
-        /*for(int i=0; i< base32.length; i++){
+      /*  for(int i=0; i< base32.length; i++){
             for(int j = 0; j< base32.length; j++){
                 String tmp = Character.toString(base32[i]);
                 tmp+=Character.toString(base32[j]);
                 keyToPartitionMap.put(tmp,(32*i)+j);
             }
-        }
-
-        for(int j = 0; j< base32.length; j++){
+        }*/
+       /* for(int j = 0; j< base32.length; j++){
 
             String tmpHotKey = "bb";
 
             tmpHotKey+=Character.toString(base32[j]);
             keyToPartitionMap.put(tmpHotKey,(1024+j));
         }
-        keyToPartitionMap.remove("bb");
+        keyToPartitionMap.remove("bb");*/
 
-        System.out.println(keyToPartitionMap.size());*/
+       // System.out.println(keyToPartitionMap.size());
 
 
         /*try
         {
             FileOutputStream fos =
-                    new FileOutputStream("./hashmap.ser");
+                    new FileOutputStream("/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-2.7.0-bin/STRETCH/KeyToPartitionMap-X.ser");
             ObjectOutputStream oos = new ObjectOutputStream(fos);
             oos.writeObject(keyToPartitionMap);
             oos.close();
@@ -78,12 +80,12 @@ public class SortMapUsingValue {
             ioe.printStackTrace();
         }*/
 
-        Map<String, Integer> map = null;
+        Map<String, Integer> map = new TreeMap<>();
         try
         {
-            FileInputStream fis = new FileInputStream("./hashmap.ser");
+            FileInputStream fis = new FileInputStream("/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-2.7.0-bin/STRETCH/KeyToPartitionMap-X.ser");
             ObjectInputStream ois = new ObjectInputStream(fis);
-            map = (HashMap) ois.readObject();
+            map = (TreeMap<String, Integer>) ois.readObject();
             ois.close();
             fis.close();
         }catch(IOException ioe)
@@ -96,7 +98,6 @@ public class SortMapUsingValue {
             c.printStackTrace();
             return;
         }
-
         /*for(int j = 0; j< base32.length; j++){
 
             String tmpHotKey = "bbk";
@@ -136,6 +137,13 @@ public class SortMapUsingValue {
             c.printStackTrace();
             return;
         }*/
+        System.out.println(((TreeMap<String, Integer>) map).lastEntry());
+        System.out.println(Collections.max(map.entrySet(), Map.Entry.comparingByValue()).getValue());
+
+
+        map.put("bbk", 1025);
+
+
         Set set = map.entrySet();
         Iterator iterator = set.iterator();
         while(iterator.hasNext()) {
@@ -143,6 +151,11 @@ public class SortMapUsingValue {
             System.out.print("key: "+ mentry.getKey() + " & Value: ");
             System.out.println(mentry.getValue());
         }
+
+
+
+        System.out.println(((TreeMap<String, Integer>) map).lastEntry());
+        System.out.println(Collections.max(map.entrySet(), Map.Entry.comparingByValue()).getValue());
 
 
 
