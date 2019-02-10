@@ -34,8 +34,8 @@ public class ClusterMasterZZ {
         cacheConfiguration.setName(cacheName);
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-       /* StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 1024+32);
-        cacheConfiguration.setAffinity(stretchAffinityFunctionXX);*/
+        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 1024+32);
+        cacheConfiguration.setAffinity(stretchAffinityFunctionXX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
 
 

@@ -63,7 +63,7 @@ import java.util.*;
 public class StretchAffinityFunctionXX implements AffinityFunction, Serializable {
 
     //Added bbkstha
-    private Map<String, Integer> keyToPartitionMap = new HashMap<>();
+    private static volatile Map<String, Integer> keyToPartitionMap = new HashMap<>();
     private int precision = 0; //Hardcoded for testing
     private static final char[] base32 = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'b', 'c', 'd', 'e', 'f',
             'g', 'h', 'j', 'k', 'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z' };
@@ -478,7 +478,7 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
         //if(ignite.affinity("STRETCH-CACHE").mapPartitionToPrimaryAndBackups(keyToPartitionMap.get(p)).isEmpty()){}
 
 
-
+        //Map<String, Integer> keyToPartitionMap = getUpdatedkeyToPartitionMap();
 
 
 
@@ -501,7 +501,7 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
 
                 p += Character.toString(key.toString().charAt(k));
                 if (keyToPartitionMap.containsKey(p)) {
-                    //System.out.println("!!The key is: "+p+" and partition is: "+keyToPartitionMap.get(p));
+                   // System.out.println("!!The key is: "+p+" and partition is: "+keyToPartitionMap.get(p));
                     return keyToPartitionMap.get(p);
                 }
             }
@@ -512,6 +512,8 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
 
     /** {@inheritDoc} */
     @Override public List<List<ClusterNode>> assignPartitions(AffinityFunctionContext affCtx) {
+
+        initializeKeyToPartitionMap();
 
         System.out.println("Hello");
 
@@ -584,6 +586,8 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
         String donated = newlyJoinedNode.attribute("donated");
         String splitCall = newlyJoinedNode.attribute("split");
 
+        //System.out.println("The partID for hotkey bbks: "+keyToPartitionMap.get("bbks"));
+
         boolean splitFlag = splitCall.equalsIgnoreCase("yes");
         int splitPartition = -1;
 
@@ -632,6 +636,8 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
             //System.out.println("Hot key is: "+hotKey);
             //System.out.println("Hot key removed with value: "+keyToPartitionMap.remove(hotKey));
             System.out.println("Size of map is: "+keyToPartitionMap.size());
+
+            //System.out.println("The partID for hotkey bbks: "+keyToPartitionMap.get("bbks"));
         }
         //parts = keyToPartitionMap.size();
         System.out.println("The size of parts is: "+parts);
@@ -745,6 +751,10 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
         System.out.println(assignments.size());
 
         System.out.println("Return assignments");
+
+
+        //getUpdatedkeyToPartitionMap
+
 
         return assignments;
     }

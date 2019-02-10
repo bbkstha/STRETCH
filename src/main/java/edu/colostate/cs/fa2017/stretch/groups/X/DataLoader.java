@@ -75,7 +75,7 @@ public class DataLoader {
 
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 1024+32);
+        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 6400);
         cacheConfiguration.setAffinity(stretchAffinityFunctionXX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
         cacheConfiguration.setStatisticsEnabled(true);
@@ -150,7 +150,7 @@ public class DataLoader {
                         //System.out.println("Counter: "+counter);
                         cache.put(geoEntry, strLine);
 
-                        //Thread.sleep(1);
+                        Thread.sleep(1);
                         //byte[] arr = ignite.configuration().getMarshaller().marshal(new GeoEntry(lat, lon, 5, timestamp));
                         //byte[] arr1 = ignite.configuration().getMarshaller().marshal(new String(strLine));
 
