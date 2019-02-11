@@ -1,40 +1,24 @@
 package edu.colostate.cs.fa2017.stretch.groups.X;
 
-import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunction;
-import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionX;
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionXX;
 import org.apache.ignite.Ignite;
-import org.apache.ignite.IgniteCache;
-import org.apache.ignite.IgniteMessaging;
 import org.apache.ignite.Ignition;
-import org.apache.ignite.cache.CacheEntry;
 import org.apache.ignite.cache.CacheMode;
-import org.apache.ignite.cache.CachePeekMode;
 import org.apache.ignite.cache.CacheRebalanceMode;
-import org.apache.ignite.cluster.ClusterGroup;
-import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.DataRegionConfiguration;
 import org.apache.ignite.configuration.DataStorageConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
-import org.apache.ignite.lang.IgniteBiPredicate;
-import org.apache.ignite.lang.IgniteClosure;
 
-import javax.cache.Cache;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
 
-public class ClusterMasterZ {
+public class ClusterWorkerX {
 
     private static final String cacheName = "STRETCH-CACHE";
     private static final String dataRegionName = "150MB_Region";
 
     public static void main(String[] args){
-
-        if(args.length<2){
-            return;
-        }
-        String groupName = args[0];
-        Integer numberOfMastersExpected = Integer.parseInt(args[1]);
 
         IgniteConfiguration igniteConfiguration = new IgniteConfiguration();
         CacheConfiguration cacheConfiguration = new CacheConfiguration();
@@ -67,8 +51,8 @@ public class ClusterMasterZ {
         igniteConfiguration.setDataStorageConfiguration(storageCfg);
         igniteConfiguration.setRebalanceThreadPoolSize(4);
         Map<String, String> userAtt = new HashMap<String, String>() {{
-            put("group",groupName);
-            put("role", "master");
+            put("group","X");
+            put("role", "worker");
             put("donated","no");
             put("region-max", "300");
             put("split","no");

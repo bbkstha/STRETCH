@@ -77,7 +77,7 @@ public class ClusterMasterX {
         // Setting the size of the default memory region to 80MB to achieve this.
         regionCfg.setInitialSize(
                 50L * 1024 * 1024);
-        regionCfg.setMaxSize(500L * 1024 * 1024);
+        regionCfg.setMaxSize(4000L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
@@ -95,7 +95,7 @@ public class ClusterMasterX {
             put("role", "master");
             put("donated","no");
             put("split","no");
-            put("region-max", "150");
+            put("region-max", "300");
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setUserAttributes(userAtt);
@@ -136,6 +136,8 @@ public class ClusterMasterX {
                         FileEditor fileEditor = new FileEditor(configTemplate, placeHolder, replacement, group);
                         String configPath = fileEditor.replace();
 
+                        System.out.println("Idle node to be used : "+idleNodeTobeUsed);
+
 
                         Collection<Map<String, Object>> hostNames = new ArrayList<>();
                         Map<String, Object> tmpMap = new HashMap<String, Object>() {{
@@ -143,7 +145,7 @@ public class ClusterMasterX {
                             put("uname", "bbkstha");
                             put("passwd", "Bibek2753");
                             put("cfg", configPath);
-                            put("nodes", 5);
+                            put("nodes", 5); //set to 2 as master is running in a separete machine alone..so trying to start a faulty node shoule be possible just by setting it to 2.
                         }};
                         hostNames.add(tmpMap);
                         Map<String, Object> dflts = null;
@@ -153,12 +155,12 @@ public class ClusterMasterX {
                         ignite.cluster().startNodes(hostNames, dflts, false, 10000, 5);
 
                         try {
-                            sleep(10000);
+                            sleep(5000);
                         }catch (IgniteInterruptedCheckedException e) {
                             e.printStackTrace();
                         }
                         System.out.println("------------------------------------------------");
-                        alreadyRequested = false;
+                        alreadyRequested = true;
                     }
                     return true;
                 }
@@ -350,8 +352,11 @@ public class ClusterMasterX {
                                             @Override
                                             public Boolean apply(Integer x) {
 
-                                                return ignite.cacheNames().contains("TMP-CACHE");
+                                                CacheConfiguration tmpCacheConfiguration1 = new CacheConfiguration("GC-CACHE");
+                                                tmpCacheConfiguration1.setCacheMode(CacheMode.LOCAL);
+                                                IgniteCache<Integer, Long> gcCache = ignite.getOrCreateCache(tmpCacheConfiguration1);
 
+                                                return ignite.cacheNames().contains("TMP-CACHE");
                                             }
                                         }, 1
 
@@ -366,15 +371,35 @@ public class ClusterMasterX {
                                                 public Map<Integer, Long> apply(Integer x) {
                                                     DataRegionMetrics dM = ignite.dataRegionMetrics(dataRegionName);
                                                     ClusterMetrics metrics = ignite.cluster().localNode().metrics();
+                                                    //int currentWaitingJobsInQueue = metrics.getCurrentWaitingJobs();
                                                     Map<Integer, Long> partitionToKeyCount = new HashMap<>();
                                                     long keysCountInPartition = 0;
+                                                    long nonEmptyPartition = 0;
                                                     for (int i = 0; i < localParts.length; i++) {
                                                         //System.out.println(cacheName);
-                                                        partitionToKeyCount.put(i, ignite.cache(cacheName).localSizeLong(localParts[i], CachePeekMode.PRIMARY));
-                                                        keysCountInPartition += ignite.cache(cacheName).localSizeLong(localParts[i], CachePeekMode.PRIMARY);
+                                                        Long keysInEachPartID = ignite.cache(cacheName).localSizeLong(localParts[i], CachePeekMode.OFFHEAP);
+                                                        //int totalGetRequest = ignite.cache(cacheName).metrics().getCacheGets();
+                                                        if(keysInEachPartID != 0){
+                                                            nonEmptyPartition++;
+                                                            partitionToKeyCount.put(i, keysInEachPartID);
+                                                            keysCountInPartition += keysInEachPartID;
+                                                        }
+                                                    }
+                                                    //Exclude the gc cache elements from the key total
+                                                    IgniteCache<Integer, Long> gcCache = ignite.cache("GC-CACHE");
+                                                    Iterator<Cache.Entry<Integer, Long>> it = gcCache.localEntries(CachePeekMode.ALL).iterator();
+                                                    int i = 0;
+                                                    while (it.hasNext()) {
+                                                        Cache.Entry<Integer, Long> entry = it.next();
+                                                        System.out.println("The GC entry is: "+entry.getKey()+" and "+entry.getValue());
+                                                        keysCountInPartition-=entry.getValue();
+                                                        int gcKey = entry.getKey();
+                                                        //System.out.println("Removing gc key...");
+                                                        partitionToKeyCount.remove(gcKey);
                                                     }
                                                     partitionToKeyCount.put(-1, keysCountInPartition);
                                                     partitionToKeyCount.put(-2, (long) metrics.getCurrentCpuLoad() * 100000);
+                                                    partitionToKeyCount.put(-3, nonEmptyPartition);
                                                     //System.out.println("The size from count is: "+(keysCountInPartition * 697.05/(1024*1024)));
                                                     return partitionToKeyCount;
                                                     //System.out.println("MEM PAGES: "+(dM.getPhysicalMemoryPages() * 4 / (double) 1024));
@@ -395,20 +420,24 @@ public class ClusterMasterX {
                                     double rate = memoryUsageProp / (double) (System.currentTimeMillis() - startTimeInMilli);
                                     double cpuUsageProp = partIDToKeyCount.get(-2) / (double) 100000.0;
                                     System.out.println("The CPU usage is: " + cpuUsageProp + ", memeory usage is: " + memoryUsageProp + " and used memory is " + memoryUsageProp * maxMemoryAllocated);
-                                    //Remove the -1 and -2 key
+                                    long totalNonEmptyPartititons = partIDToKeyCount.get(-3);
+                                    //Remove the -1 and -2 and -3 key
                                     partIDToKeyCount.remove(-1);
                                     partIDToKeyCount.remove(-2);
+                                    partIDToKeyCount.remove(-3);
+                                    System.out.println("Total non empty partitions: "+totalNonEmptyPartititons+" and map size "+partIDToKeyCount.size());
                                     LinkedHashMap<Integer, Long> partIDToKeyCountReverse = new LinkedHashMap<>();
                                     partIDToKeyCount.entrySet().stream().sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
                                             .forEachOrdered(x -> partIDToKeyCountReverse.put(x.getKey(), x.getValue()));
 
                                     //Power Law Distribution:: Test only after 40% of memory allocated is used.
-                                    if (memoryUsageProp >= 0.2) {
+                                    if (memoryUsageProp >= 0.4) {
                                         System.out.println("Power Law Test");
 
-                                        int sizeOfMap = partIDToKeyCountReverse.size();
-                                        int upper20 = 5; //(int) Math.ceil(sizeOfMap / 5.0);
+                                        System.out.println("Total non-empty partitions is: " + totalNonEmptyPartititons);
+                                        int upper20 = (int) Math.ceil(totalNonEmptyPartititons / 5.0);
                                         System.out.println("20% of partitions is: " + upper20);
+                                        System.out.println("Total Keys: "+totalKeyCount);
                                         long usage80 = totalKeyCount * 4 / 5;
                                         System.out.println("80% of memory is: " + usage80);
                                         String skewedPartitions = "";
@@ -416,8 +445,9 @@ public class ClusterMasterX {
                                             usage80 -= d.getValue();
                                             skewedPartitions += d.getKey() + ",";
                                             upper20--;
-                                            if (upper20 < 1 && usage80 <= 15000) {
-                                                System.out.println("Skewed partitions: " + skewedPartitions);
+                                            System.out.println("The key,value is: "+d.getKey()+", "+d.getValue());
+                                            if (upper20 < 1) {
+
                                                 System.out.println("upper20 is:" + upper20 + " and usage80 is: " + usage80);
                                                 break;
                                             }
@@ -426,6 +456,9 @@ public class ClusterMasterX {
                                         //20% of partitions are holding 80% or more keys.
                                         //Need to split the partitions
                                         if (usage80 <= 1500) {
+                                            System.out.println("Skewed partitions: " + skewedPartitions);
+
+                                            System.out.println("Skewed Distribution Detected.");
 
                                             partitionSplitOngoing.put(c.id(), true);
                                             //Create TMP-CACHE to avoid mulitple splitting on the same node at a time
@@ -441,7 +474,7 @@ public class ClusterMasterX {
                                                             tmpCacheConfiguration.setCacheMode(CacheMode.LOCAL);
                                                             tmpCacheConfiguration1.setCacheMode(CacheMode.LOCAL);
                                                             IgniteCache<DataLoader.GeoEntry, String> tmpCache = ignite.createCache(tmpCacheConfiguration);
-                                                            IgniteCache<Integer, Long> gcCache = ignite.createCache(tmpCacheConfiguration1);
+                                                            IgniteCache<Integer, Long> gcCache = ignite.getOrCreateCache(tmpCacheConfiguration1);
                                                             return 1;
                                                         }
                                                     },
@@ -451,7 +484,8 @@ public class ClusterMasterX {
 
                                             String[] skewedPart = skewedPartitions.split(",");
                                             String skewedKeys = "";
-                                            String path = "/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-2.7.0-bin/STRETCH/KeyToPartitionMap-" + groupName + ".ser";
+                                            //String path = "/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-2.7.0-bin/STRETCH/KeyToPartitionMap-" + groupName + ".ser";
+                                            String path = "/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-2.7.0-bin/STRETCH/KeyToPartitionMap-X.ser";
                                             char[] base32 = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'b', 'c', 'd', 'e', 'f',
                                                     'g', 'h', 'j', 'k', 'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'};
                                             Map<String, Integer> keyToPartitionMap = new HashMap<>();
@@ -489,7 +523,7 @@ public class ClusterMasterX {
 
                                                     for (int index = 0; index < skewedPart.length; index++) {
 
-                                                        if(!ignite.cache("GC-CACHE").containsKey(skewedPart[index])){
+                                                        if(!ignite.cache("GC-CACHE").containsKey(Integer.parseInt(skewedPart[index]))){
 
                                                             int eachSkewedPartID = Integer.parseInt(skewedPart[index]);
                                                             System.out.println("Skewed partition idex: " + eachSkewedPartID);
@@ -517,7 +551,7 @@ public class ClusterMasterX {
                                                             for(int k =0; k< base32.length; k++){
                                                                 String innerTmpHotKey = tmpHotKey + base32[k];
                                                                 keyToPartitionMap.put(innerTmpHotKey, largestPartitionID + ((32*j)+k));
-                                                                System.out.println("The inner hotKey is: "+innerTmpHotKey+" and partID is: "+keyToPartitionMap.get(innerTmpHotKey));
+                                                                //System.out.println("The inner hotKey is: "+innerTmpHotKey+" and partID is: "+keyToPartitionMap.get(innerTmpHotKey));
                                                             }
                                                         }
                                                         keyToPartitionMap.remove(eachSkewedKeys[index]);
@@ -580,12 +614,13 @@ public class ClusterMasterX {
                                                                 }
                                                                 //System.out.println("FROM ANOTHER: " + i);
                                                                 tmpCache.put(e.getKey(), e.getValue());
-                                                                //System.out.println(localCache.remove(e.getKey()));
+                                                                localCache.remove(e.getKey());
                                                                 //System.out.println("" + i + ". " + e.getKey() + " and value: " + e.getValue());
                                                             }
                                                             String myHostName = ignite.cluster().localNode().hostNames().iterator().next();
                                                             System.out.println("The hostname is: "+myHostName);
-                                                            String group = ignite.cluster().localNode().attribute("group");
+                                                            //String group = ignite.cluster().localNode().attribute("group");
+                                                            String group = "X";
                                                             String placeHolder = "_GROUP-NAME_" + "##" + "_DONATED_" + "##" + "_SPLIT-PARTITION_" + "##" + "_PATH_";
                                                             //System.out.println(hotPartitions);
                                                             String replacement = group + "##" + "no" + "##" + "yes" + "##" + path;
@@ -598,12 +633,12 @@ public class ClusterMasterX {
                                                                 put("uname", "bbkstha");
                                                                 put("passwd", "Bibek2753");
                                                                 put("cfg", configPath1);
-                                                                put("nodes", 3);
+                                                                put("nodes", 5);
                                                             }};
                                                             hostConfig.add(tmpMap);
                                                             Map<String, Object> dflts = null;
                                                             System.out.println("Starting partition split node!!!!!");
-                                                            ignite.cluster().startNodes(hostConfig, dflts, false, 10000, 3);
+                                                            ignite.cluster().startNodes(hostConfig, dflts, false, 10000, 5);
 
                                                             //Now wait until partition split is apparent
 
@@ -614,7 +649,6 @@ public class ClusterMasterX {
 
                                                             //System.out.println("OLD PATITION ID: "+prevPart);
                                                             //System.out.println("NEW PATITION ID: "+ignite.affinity(cacheName).partition(testKey));
-
                                                             try{
                                                                 Thread.sleep(2000);
                                                             }catch (InterruptedException e){
@@ -624,10 +658,9 @@ public class ClusterMasterX {
                                                             if (ignite.affinity(cacheName).partition(testKey) != prevPart) {
                                                                 System.out.println("New partition ID is: " + ignite.affinity(cacheName).partition(testKey));
                                                                 flag = false;
-                                                                System.out.println(flag);
                                                             }
                                                         }
-                                                        int cc = 0;
+                                                        long cc = 0;
                                                         Iterator<Cache.Entry<DataLoader.GeoEntry, String>> itr = tmpCache.localEntries(CachePeekMode.OFFHEAP).iterator();
                                                         while (itr.hasNext()) {
                                                             cc++;
@@ -656,7 +689,7 @@ public class ClusterMasterX {
                                                             }
 
                                                             System.out.println("garbage in prev partition: "+c1);
-                                                            ignite.cache("GC-CACHE").put(skewedPart[index], c1);
+                                                            ignite.cache("GC-CACHE").put(Integer.parseInt(skewedPart[index]), c1);
                                                         }
 
                                                         tmpCache.destroy();
@@ -667,9 +700,18 @@ public class ClusterMasterX {
                                             );
                                             //return true;
                                         }
+
+                                        /*try{
+                                            Thread.sleep(20000000);
+                                        }catch (InterruptedException e){
+
+                                        }*/
+
+
                                     }
 
                                     System.out.println("Out of Power Law Test");
+
 
                                     boolean flag1 = true;
                                     while (flag1) {
@@ -719,7 +761,7 @@ public class ClusterMasterX {
                                 hotspotNodeID = maxCpuUsedID;
                             }
 
-                            if ((maxMemoryUsed > 0.9 || maxCpuUsed > 0.9) && !alreadyRequested && !checker) {
+                            if ((maxMemoryUsed > 0.7 || maxCpuUsed > 0.7) && !alreadyRequested && !checker) {
 
                                 System.out.println("I am group: " + groupName + " and I reached a hotspot.And my memory util is: " + maxMemoryUsed*500);
                                 //System.out.println("Cause of hotspot: "+cause);
@@ -735,21 +777,26 @@ public class ClusterMasterX {
                                                 //System.out.println("Inside hotspot node!");
                                                 Map<Integer, Long> localCountToPart = new HashMap<>();
                                                 //System.out.println("Again The size of partition asssociated with hotspot is: " + localParts.length);
-                                                //Long counter = Integer.toUnsignedLong(0);
+                                                long totalKeys = 0;
                                                 for (int i = 0; i < localParts.length; i++) {
-                                                    //System.out.println(cacheName);
-                                                    Long keysCountInPartition = ignite.cache(cacheName).localSizeLong(localParts[i], CachePeekMode.PRIMARY);
-                                                    //counter+=keysCountInPartition;
-                                                    localCountToPart.put(localParts[i], keysCountInPartition);
-                                                }
-                                                //localCountToPart.put(-1, counter);
 
+                                                    if(!ignite.cache("GC-CACHE").containsKey(localParts[i])){
+                                                        Long keysCountInPartition = ignite.cache(cacheName).localSizeLong(localParts[i], CachePeekMode.OFFHEAP);
+                                                        if(keysCountInPartition != 0){
+                                                            localCountToPart.put(localParts[i], keysCountInPartition);
+                                                            totalKeys += keysCountInPartition;
+                                                        }
+                                                    }
+                                                }
+                                                localCountToPart.put(-1, totalKeys);
                                                 return localCountToPart;
                                             }
                                         },
                                         1
                                 );
 
+                                long totalKeys = partitionToCount.get(-1);
+                                partitionToCount.remove(-1);
                                 //calculate skewness
                                 /*
                                 Implementation required
@@ -767,38 +814,80 @@ public class ClusterMasterX {
                                 int select = 0;
                                 double amountToTransfer = 0.0;
 
+                                System.out.println("Current stat of hotspot: "+totalKeys * 697.05 / (1024 *1024));
 
-                                long sumed = 0;
-                                for (Map.Entry<Integer, Long> d : reverseSortedMap.entrySet()) {
-
-                                    sumed += d.getValue();
-
-                                }
-
-                                System.out.println("Current stat of hotspot: "+sumed * 697.05 / (1024 *1024));
-
-                                double threshold = sumed * 697.05 * 0.9 / (double) (1024 * 1024);
+                                long threshold = (long) totalKeys * 5/10;
                                 System.out.println(threshold);
                                 int size = reverseSortedMap.size() / 2;
                                 for (Map.Entry<Integer, Long> e : reverseSortedMap.entrySet()) {
-
                                     //System.out.println("Partition is: "+e.getKey()+" and count is: "+e.getValue());
-
-
                                     partitionToMove = partitionToMove + e.getKey() + ",";
-                                    amountToTransfer += e.getValue() * 697.05 / (double) (1024 * 1024);
-                                    if (amountToTransfer > threshold) {
+                                    threshold-=e.getValue();
+                                    size--;
+                                    if (threshold < 100 || size < 1) {
                                         System.out.println("Amount to transfer: " + amountToTransfer + " has surpassed threshold: " + threshold);
                                         break;
                                     }
                                 }
 
-
-
-                                System.out.println("The length of partitions to move is: " + partitionToMove.split(",").length);
+                                System.out.println("The Partitions to move is: " + partitionToMove);
 
                                 //System.out.println("The length of partitions to move is: "+partitionToMove);
 
+                                //Try to find idle node within own cluster
+                                if(cause.equalsIgnoreCase("M")){
+                                    Map.Entry<Double, UUID> leastUsedLocalWorker = ((TreeMap<Double, UUID>) offheapUsage).firstEntry();
+                                    if(leastUsedLocalWorker.getKey() < 0.4) {
+
+                                        Iterator<Map.Entry<Double, UUID>> iterator = cpuUsage.entrySet().iterator();
+                                        while (iterator.hasNext()) {
+                                            Map.Entry<Double, UUID> entry = iterator.next();
+                                            if (leastUsedLocalWorker.getValue() == entry.getValue()) {
+                                                if (entry.getKey() < 0.6) {
+                                                    hotspotPartitions = partitionToMove;
+                                                    String localDonation = ignite.cluster().localNode().id() + "::" + leastUsedLocalWorker.getValue();
+                                                    System.out.println("Local idle worker used.");
+                                                    mastersMessanger.send(OFFER_GRANTED, localDonation);
+                                                    return true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }else if(cause.equalsIgnoreCase("C")){
+                                    Map.Entry<Double, UUID> leastCPUUsedLocalWorker = ((TreeMap<Double, UUID>) cpuUsage).firstEntry();
+                                    if(leastCPUUsedLocalWorker.getKey() < 0.4) {
+
+                                        Iterator<Map.Entry<Double, UUID>> iterator = offheapUsage.entrySet().iterator();
+                                        while (iterator.hasNext()) {
+                                            Map.Entry<Double, UUID> entry = iterator.next();
+                                            if (leastCPUUsedLocalWorker.getValue() == entry.getValue()) {
+                                                if (entry.getKey() < 0.6) {
+                                                    hotspotPartitions = partitionToMove;
+                                                    String localDonation = ignite.cluster().localNode().id() + "::" + leastCPUUsedLocalWorker.getValue();
+                                                    mastersMessanger.send(OFFER_GRANTED, localDonation);
+                                                    return true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }else if(cause.equalsIgnoreCase("CM")){
+                                    Map.Entry<Double, UUID> leastUsedLocalWorker = ((TreeMap<Double, UUID>) offheapUsage).firstEntry();
+                                    if(leastUsedLocalWorker.getKey() < 0.4) {
+
+                                        Iterator<Map.Entry<Double, UUID>> iterator = cpuUsage.entrySet().iterator();
+                                        while (iterator.hasNext()) {
+                                            Map.Entry<Double, UUID> entry = iterator.next();
+                                            if (leastUsedLocalWorker.getValue() == entry.getValue()) {
+                                                if (entry.getKey() < 0.4) {
+                                                    hotspotPartitions = partitionToMove;
+                                                    String localDonation = ignite.cluster().localNode().id() + "::" + leastUsedLocalWorker.getValue();
+                                                    mastersMessanger.send(OFFER_GRANTED, localDonation);
+                                                    return true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 hotspotPartitions = partitionToMove;
                                 alreadyRequested = true;
                                 mastersMessanger.send(REQUEST_TOPIC, (Object) cause);
@@ -814,7 +903,7 @@ public class ClusterMasterX {
                 if(ignite.cluster().forAttribute("role","master").nodes().size() == numberOfMastersExpected){
                     //Need to wait for few seconds to let the system come to stable state
                     if(!alreadyRequested){
-                        Thread.sleep(4000);
+                        Thread.sleep(5000);
                         //System.out.println("NUmber of masters: "+ignite.cluster().forAttribute("role","master").nodes().size());
                        //System.out.println("START");
                         mastersMessanger.send(RESOURCE_MONITOR, "START");

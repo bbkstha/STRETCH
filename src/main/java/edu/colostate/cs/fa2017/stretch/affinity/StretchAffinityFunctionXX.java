@@ -501,7 +501,7 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
 
                 p += Character.toString(key.toString().charAt(k));
                 if (keyToPartitionMap.containsKey(p)) {
-                   // System.out.println("!!The key is: "+p+" and partition is: "+keyToPartitionMap.get(p));
+                   //System.out.println("!!The key is: "+p+" and partition is: "+keyToPartitionMap.get(p));
                     return keyToPartitionMap.get(p);
                 }
             }
@@ -706,25 +706,19 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
 
             if (flag && j < partitionsToMoveAscending.length) {
                     if (i == partitionsToMoveAscending[j]) {
-
                         j++;
-
                         if(causeOfHotspot.equalsIgnoreCase("CM")){
-
                             /*List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups(), neighborhoodCache);
                             partAssignment.add(newList.get(0));*/
                             assignments.add(newList);
-
                         }else if(causeOfHotspot.equalsIgnoreCase("C")){
                             assignments.add(newList);
  /*                           List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups(), neighborhoodCache);
                             partAssignment.add(newList.get(0));
 */
                         }else if(causeOfHotspot.equalsIgnoreCase("M")){
-
                             //System.out.println(""+i+"Movement");
                             //System.out.println(""+j);
-
                             assignments.add(newList);
                         }
                     } else {
@@ -735,11 +729,8 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
                         assignments.add(partAssignment);
                     }
             }else{
-
                 //System.out.println(" "+i+" Entered partition assignment!");
                 //System.out.println("The size of nodes: "+nodes.size());
-
-
                     List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups(), neighborhoodCache);
                     assignments.add(partAssignment);
 

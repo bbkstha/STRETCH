@@ -150,7 +150,7 @@ public class DataLoader {
                         //System.out.println("Counter: "+counter);
                         cache.put(geoEntry, strLine);
 
-                        Thread.sleep(1);
+                       // Thread.sleep(1);
                         //byte[] arr = ignite.configuration().getMarshaller().marshal(new GeoEntry(lat, lon, 5, timestamp));
                         //byte[] arr1 = ignite.configuration().getMarshaller().marshal(new String(strLine));
 

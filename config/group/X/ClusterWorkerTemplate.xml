@@ -35,6 +35,8 @@
                 <entry key="hotspot-partitions" value="_HOT-PARTITIONS_"/>
                 <entry key="cause" value="_CAUSE_"/>
                 <entry key="idle" value="_IDLE-NODE_"/>
+                <entry key="split" value="no"/>
+                <entry key="map" value="no"/>
             </map>
         </property>
 
