@@ -593,25 +593,8 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
 
         if(splitCall.equalsIgnoreCase("yes")){
 
-            //String hotKey = newlyJoinedNode.attribute("keyToSplit");
-
-            //splitPartition = Integer.parseInt(newlyJoinedNode.attribute("partitionToSplit"));
-           String path = newlyJoinedNode.attribute("map");
-
-            //int hotParttion = keyToPartitionMap.get(hotKey);
-
-            //System.out.println("HOt partition is: "+hotParttion);
+            String path = newlyJoinedNode.attribute("map");
             int previousSize = keyToPartitionMap.size();
-
-            //String tmp = Character.toString(base32[i]);
-            /*for(int j = 0; j< base32.length; j++){
-
-                String tmpHotKey = newlyJoinedNode.attribute("keyToSplit");
-
-                tmpHotKey+=Character.toString(base32[j]);
-                keyToPartitionMap.put(tmpHotKey,previousSize+j);
-            }*/
-
             Map<String, Integer> map = new HashMap<>();
 
             try {

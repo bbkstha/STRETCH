@@ -7,6 +7,7 @@ import org.apache.ignite.cache.*;
 import org.apache.ignite.cache.affinity.Affinity;
 import org.apache.ignite.cache.affinity.AffinityKeyMapped;
 import org.apache.ignite.cache.query.ScanQuery;
+import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.DataStorageConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
@@ -75,7 +76,7 @@ public class DataLoader {
 
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 6400);
+        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 2048);
         cacheConfiguration.setAffinity(stretchAffinityFunctionXX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
         cacheConfiguration.setStatisticsEnabled(true);
@@ -89,11 +90,12 @@ public class DataLoader {
             put("role", "client");
             put("donated","no");
             put("region-max", "100");
-            put("split","no");
+            put("split","yes");
+            put("map","/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-2.7.0-bin/STRETCH/KeyToPartitionMap-X.ser");
 
         }};
         igniteConfiguration.setUserAttributes(userAtt);
-        igniteConfiguration.setClientMode(true);
+        igniteConfiguration.setClientMode(false);
 
         // Start Ignite node.
         Ignite ignite = Ignition.start(igniteConfiguration);
@@ -367,6 +369,19 @@ public class DataLoader {
         }
 
         System.out.println("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+
+        Iterator<ClusterNode> iterator = ignite.cluster().nodes().iterator();
+        while(iterator.hasNext()){
+            ClusterNode n = iterator.next();
+            int[] parts = affinity.allPartitions(n);
+            System.out.println("The partitions for node: "+n.id());
+            System.out.println("");
+
+            for(int i=0; i<parts.length; i++){
+                System.out.println(parts[i]);
+            }
+            System.out.println("---------------------------");
+        }
 
         /*CacheMetrics cacheMetrics  = cache.metrics(ignite.cluster());
 

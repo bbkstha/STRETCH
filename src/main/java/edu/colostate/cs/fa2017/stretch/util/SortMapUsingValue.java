@@ -46,7 +46,6 @@ public class SortMapUsingValue {
         System.out.println("The length of partitions to move is: " + partitionToMove.split(",").length);
         System.out.println("The length of partitions to move is: " + partitionToMove.substring(0, partitionToMove.length()-1).split(",").length);
 */
-
         for(int i=0; i< base32.length; i++){
             for(int j = 0; j< base32.length; j++){
                 String tmp = Character.toString(base32[i]);
