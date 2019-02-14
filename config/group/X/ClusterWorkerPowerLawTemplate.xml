@@ -34,6 +34,9 @@
                 <entry key="donated" value="_DONATED_"/>
                 <entry key="split" value="_SPLIT-PARTITION_"/>
                 <entry key="map" value="_PATH_"/>
+                <entry key="startSplit" value="_START_"/>
+                <entry key="endSplit" value="_END_"/>
+                <entry key="node" value="_NODE_"/>
             </map>
         </property>
 

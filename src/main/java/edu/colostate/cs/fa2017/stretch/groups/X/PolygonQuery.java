@@ -172,7 +172,7 @@ private static final String cacheName = "STRETCH-CACHE";
 
         Coordinates sampleCoordiantes = new Coordinates((float) 46.89900470407791, (float)-139.2253230941643);
         edu.colostate.cs.fa2017.stretch.util.GeoHashProcessor.Point<Integer> point = coordinatesToXY(sampleCoordiantes);
-        System.out.println("The point lies within the polygon: "+queryPolygonToBeSent.contains(point.X(), point.Y()));
+        //System.out.println("The point lies within the polygon: "+queryPolygonToBeSent.contains(point.X(), point.Y()));
 
         long totalElementsWithinPolygon = 0;
         for(Map.Entry<ClusterNode, List<Integer>> ent: intersectingPartitions.entrySet()){

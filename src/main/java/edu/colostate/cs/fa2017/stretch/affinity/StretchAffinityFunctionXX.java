@@ -16,6 +16,7 @@ package edu.colostate.cs.fa2017.stretch.affinity;/*
  */
 
 
+import org.apache.hadoop.mapreduce.Cluster;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteLogger;
 import org.apache.ignite.cache.affinity.AffinityFunction;
@@ -31,6 +32,7 @@ import org.apache.ignite.lang.IgniteBiTuple;
 import org.apache.ignite.resources.IgniteInstanceResource;
 import org.apache.ignite.resources.LoggerResource;
 import org.jetbrains.annotations.Nullable;
+import org.omg.PortableInterceptor.SYSTEM_EXCEPTION;
 
 import java.io.*;
 import java.nio.channels.Channels;
@@ -146,7 +148,7 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
      */
     public StretchAffinityFunctionXX(boolean exclNeighbors, int parts) {
         this(exclNeighbors, parts, null);
-        initializeKeyToPartitionMap();
+        //initializeKeyToPartitionMap();
     }
 
     /**
@@ -188,23 +190,28 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
 
     public void initializeKeyToPartitionMap(){
 
-        /*for(int i=0; i< base32.length; i++){
-            for(int j = 0; j< base32.length; j++){
-                String tmp = Character.toString(base32[i]);
-                tmp+=Character.toString(base32[j]);
-                keyToPartitionMap.put(tmp,Arrays.asList((32*i)+j));
-            }
-        }*/
-        Map<String, Integer> keyMap = new HashMap<>();
-        for(int i=0; i< base32.length; i++){
-            for(int j = 0; j< base32.length; j++){
-                String tmp = Character.toString(base32[i]);
-                tmp+=Character.toString(base32[j]);
-                keyMap.put(tmp,(32*i)+j);
-            }
+        Map<String, Integer> map = new HashMap<>();
+        String path = "/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-2.7.0-bin/STRETCH/KeyToPartitionMap-X.ser";
+
+        try {
+            FileChannel channel1 = new RandomAccessFile(path, "rw").getChannel();
+            FileLock lock = channel1.lock(); //Lock the file. Block until release the lock
+            System.out.println("LOCKED IN AF.");
+            ObjectInputStream ois = new ObjectInputStream(Channels.newInputStream(channel1));
+            map = (HashMap<String, Integer>) ois.readObject();
+            System.out.println("UNLOCKED IN AF.");
+            keyToPartitionMap = map;
+            lock.release();
+            ois.close();
+            channel1.close();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
         }
 
-        this.keyToPartitionMap = keyMap;
 
         System.out.println("Initialization done.");
     }
@@ -513,7 +520,11 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
     /** {@inheritDoc} */
     @Override public List<List<ClusterNode>> assignPartitions(AffinityFunctionContext affCtx) {
 
-        initializeKeyToPartitionMap();
+
+        String event = affCtx.discoveryEvent().shortDisplay().split(":")[0];
+        System.out.println(event);
+
+
 
         System.out.println("Hello");
 
@@ -568,8 +579,8 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
 
         List<ClusterNode> nodes = affCtx.currentTopologySnapshot();
 
-        //System.out.println("#nodes"+nodes.size());
 
+        //System.out.println("#nodes"+nodes.size());
         ClusterNode newlyJoinedNode = affCtx.discoveryEvent().eventNode();
         int index=0;
 
@@ -585,13 +596,33 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
 
         String donated = newlyJoinedNode.attribute("donated");
         String splitCall = newlyJoinedNode.attribute("split");
+        String newNodeID = newlyJoinedNode.id().toString();
+        System.out.println("New node id: "+newNodeID);
+        List<ClusterNode> splitNodeList = new ArrayList<>();
 
         //System.out.println("The partID for hotkey bbks: "+keyToPartitionMap.get("bbks"));
 
         boolean splitFlag = splitCall.equalsIgnoreCase("yes");
+        int startSplit = -1;
+        int endSplit = -1;
         int splitPartition = -1;
 
-        if(splitCall.equalsIgnoreCase("yes")){
+        if(splitFlag){
+            System.out.println("Size of nodes:"+nodes.size());
+            for(int i=0; i<nodes.size(); i++){
+                System.out.println("The nodes are: "+nodes.get(i));
+            }
+            //nodes.remove(newlyJoinedNode);
+
+
+
+
+            startSplit = Integer.parseInt(newlyJoinedNode.attribute("startSplit"));
+            endSplit = Integer.parseInt(newlyJoinedNode.attribute("endSplit"));
+            String splitNodeID = newlyJoinedNode.attribute("node");
+
+            System.out.println("StartSplit: "+startSplit);
+            System.out.println("EndSplit: "+endSplit);
 
             String path = newlyJoinedNode.attribute("map");
             int previousSize = keyToPartitionMap.size();
@@ -615,15 +646,28 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
             } catch (ClassNotFoundException e) {
                 e.printStackTrace();
             }
-            System.out.println("Size of map is: "+keyToPartitionMap.size());
+            //System.out.println("Size of map is: "+keyToPartitionMap.size());
             //System.out.println("Hot key is: "+hotKey);
             //System.out.println("Hot key removed with value: "+keyToPartitionMap.remove(hotKey));
             System.out.println("Size of map is: "+keyToPartitionMap.size());
 
+            for(int k=0; k< nodes.size(); k++){
+                if(nodes.get(k).id().toString().equalsIgnoreCase(splitNodeID)){
+
+                    System.out.println("Added to splitList: "+nodes.get(k).id());
+                    splitNodeList.add(nodes.get(k));
+                    break;
+                }
+            }
+
             //System.out.println("The partID for hotkey bbks: "+keyToPartitionMap.get("bbks"));
         }
+
+
+
+
         //parts = keyToPartitionMap.size();
-        System.out.println("The size of parts is: "+parts);
+        //System.out.println("The size of parts is: "+parts);
         List<ClusterNode> newList = new ArrayList<>();
         //newList.add(newlyJoinedNode);
         int[] partitionsToMoveAscending = null;
@@ -682,6 +726,16 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
 
 
         boolean flag = donated.equals("yes");
+
+        if(!event.equals("NODE_LEFT")){
+
+            if(!(flag || splitFlag)){
+                initializeKeyToPartitionMap();
+            }
+
+        }
+
+
         //System.out.println("flag: "+flag);
         int j = 0;
         //System.out.println(parts);
@@ -705,21 +759,38 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
                             assignments.add(newList);
                         }
                     } else {
+
+
+                        if(event.equals("NODE_LEFT")){
+
+                            assignments.add(affCtx.previousAssignment(i));
+                        }
+                        else{
+                            List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups(), neighborhoodCache);
+                            assignments.add(partAssignment);
+                        }
                         //System.out.println("The node for moved partition id: " + i + " is: " + affCtx.previousAssignment(i));
                         //assignments.add(affCtx.previousAssignment(i));
                         //System.out.println(""+i+"Entering partiton assignment after mismatch.");
-                        List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups(), neighborhoodCache);
-                        assignments.add(partAssignment);
+                        //List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups(), neighborhoodCache);
+
                     }
+            }
+            else if(splitFlag && (i>=startSplit && i<=endSplit)){
+
+                assignments.add(splitNodeList);
+                //System.out.println("The partitions "+i+" is set to: "+splitNodeList.get(0).id()+" from previous assignment: "+affCtx.previousAssignment(i).get(0).id());
             }else{
-                //System.out.println(" "+i+" Entered partition assignment!");
-                //System.out.println("The size of nodes: "+nodes.size());
+                if(event.equals("NODE_LEFT")){
+
+                    assignments.add(affCtx.previousAssignment(i));
+                }
+                else{
                     List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups(), neighborhoodCache);
                     assignments.add(partAssignment);
-
-           }
+                }
+            }
         }
-
 
 
         System.out.println(assignments.size());

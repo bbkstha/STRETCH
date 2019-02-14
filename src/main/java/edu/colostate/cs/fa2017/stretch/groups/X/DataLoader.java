@@ -76,7 +76,7 @@ public class DataLoader {
 
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 2048);
+        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 6400);
         cacheConfiguration.setAffinity(stretchAffinityFunctionXX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
         cacheConfiguration.setStatisticsEnabled(true);
@@ -90,26 +90,28 @@ public class DataLoader {
             put("role", "client");
             put("donated","no");
             put("region-max", "100");
-            put("split","yes");
+            put("split","no");
             put("map","/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-2.7.0-bin/STRETCH/KeyToPartitionMap-X.ser");
 
         }};
         igniteConfiguration.setUserAttributes(userAtt);
-        igniteConfiguration.setClientMode(false);
+        igniteConfiguration.setClientMode(true);
 
         // Start Ignite node.
         Ignite ignite = Ignition.start(igniteConfiguration);
 
         //ignite.cluster().resetMetrics();
         IgniteCache<GeoEntry, String> cache = ignite.getOrCreateCache(cacheConfiguration);
+        cache.clear();
 
         Affinity affinity = ignite.affinity(cacheName);
 
 
-        cache.clear();
 
-
-        String path = "/s/chopin/b/grad/bbkstha/stretch/data/";
+        if(args.length < 1){
+            System.out.println("Input Data Path required. ");
+        }
+        String path = args[0];
 
 //            for(int i=0; i<100000000; i++)
 //                cache.put(Integer.toString(i),Integer.toString(i));
@@ -235,6 +237,7 @@ public class DataLoader {
             }
         System.out.println("The value of counter is: "+counter);
         System.out.println("-----------------------------------");
+       // cache.destroy();
 
 
 
@@ -370,7 +373,7 @@ public class DataLoader {
 
         System.out.println("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
 
-        Iterator<ClusterNode> iterator = ignite.cluster().nodes().iterator();
+        /*Iterator<ClusterNode> iterator = ignite.cluster().nodes().iterator();
         while(iterator.hasNext()){
             ClusterNode n = iterator.next();
             int[] parts = affinity.allPartitions(n);
@@ -381,7 +384,7 @@ public class DataLoader {
                 System.out.println(parts[i]);
             }
             System.out.println("---------------------------");
-        }
+        }*/
 
         /*CacheMetrics cacheMetrics  = cache.metrics(ignite.cluster());
 

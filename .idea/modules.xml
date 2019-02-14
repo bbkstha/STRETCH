@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/IgniteExamples.iml" filepath="$PROJECT_DIR$/IgniteExamples.iml" />
+      <module fileurl="file://$PROJECT_DIR$/STRETCH.iml" filepath="$PROJECT_DIR$/STRETCH.iml" />
     </modules>
   </component>
 </project>

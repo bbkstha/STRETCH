@@ -15,9 +15,11 @@ public class SortMapUsingValue {
             'g', 'h', 'j', 'k', 'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z' };
 
     private static Map<String, Integer > keyToPartitionMap = new HashMap<>();
+    public SortMapUsingValue()
+    {
 
-
-    public static void main(String[] args) {
+    }
+    public void initializeMap() {
 //        System.out.println("\nSorting using Java8 streams\n");
 //
 //        System.out.println((double)(Math.random() % 0.00001));
@@ -78,7 +80,6 @@ public class SortMapUsingValue {
         {
             ioe.printStackTrace();
         }
-
         Map<String, Integer> map = new HashMap<>();
         try
         {
