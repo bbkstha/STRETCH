@@ -148,7 +148,6 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
      */
     public StretchAffinityFunctionXX(boolean exclNeighbors, int parts) {
         this(exclNeighbors, parts, null);
-        //initializeKeyToPartitionMap();
     }
 
     /**
@@ -183,15 +182,41 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
         setPartitions(parts);
 
         this.backupFilter = backupFilter;
+
+        initializeKeyToPartitionMap();
+
     }
 
     /********************************************************/
 
 
-    public void initializeKeyToPartitionMap(){
+    private void initializeKeyToPartitionMap(){
+
+
+       // String path = "/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-2.7.0-bin/STRETCH/KeyToPartitionMap-X.ser";
+        keyToPartitionMap = new HashMap<>();
+        for(int i=0; i< base32.length; i++){
+            for(int j = 0; j< base32.length; j++){
+                String tmp = Character.toString(base32[i]);
+                tmp+=Character.toString(base32[j]);
+                keyToPartitionMap.put(tmp,(32*i)+j);
+            }
+        }
+        /*try
+        {
+            FileOutputStream fos =
+                    new FileOutputStream(path);
+            ObjectOutputStream oos = new ObjectOutputStream(fos);
+            oos.writeObject(keyToPartitionMap);
+            oos.close();
+            fos.close();
+            System.out.printf("Serialized HashMap data is saved in hashmap.ser");
+        }catch(IOException ioe)
+        {
+            ioe.printStackTrace();
+        }
 
         Map<String, Integer> map = new HashMap<>();
-        String path = "/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-2.7.0-bin/STRETCH/KeyToPartitionMap-X.ser";
 
         try {
             FileChannel channel1 = new RandomAccessFile(path, "rw").getChannel();
@@ -212,6 +237,15 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
             e.printStackTrace();
         }
 
+
+        Set set = keyToPartitionMap.entrySet();
+        Iterator iterator = set.iterator();
+        while(iterator.hasNext()) {
+            Map.Entry mentry = (Map.Entry)iterator.next();
+            System.out.print("key: "+ mentry.getKey() + " & Value: ");
+            System.out.println(mentry.getValue());
+        }
+*/
 
         System.out.println("Initialization done.");
     }
@@ -396,7 +430,14 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
             return nodes;
 
         List<ClusterNode> lst = new ArrayList<>();
-        int partitionsPerNode = parts / nodes.size();
+        int partitionsPerNode = 0;
+        if(part < 1024){
+            partitionsPerNode = (int) Math.ceil(1024 / (double) nodes.size());
+        }
+        else {
+            partitionsPerNode = parts / nodes.size();
+        }
+
         //System.out.println("The size of nodes: "+nodes.size()+" and partitionsPerNode: "+partitionsPerNode);
         int index = 0;
         while (index < nodes.size()) {
@@ -646,6 +687,16 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
             } catch (ClassNotFoundException e) {
                 e.printStackTrace();
             }
+
+
+            /*Set set = keyToPartitionMap.entrySet();
+            Iterator iterator = set.iterator();
+            while(iterator.hasNext()) {
+                Map.Entry mentry = (Map.Entry)iterator.next();
+                System.out.print("key: "+ mentry.getKey() + " & Value: ");
+                System.out.println(mentry.getValue());
+            }*/
+
             //System.out.println("Size of map is: "+keyToPartitionMap.size());
             //System.out.println("Hot key is: "+hotKey);
             //System.out.println("Hot key removed with value: "+keyToPartitionMap.remove(hotKey));
@@ -727,13 +778,13 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
 
         boolean flag = donated.equals("yes");
 
-        if(!event.equals("NODE_LEFT")){
+        /*if(!event.equals("NODE_LEFT")){
 
             if(!(flag || splitFlag)){
                 initializeKeyToPartitionMap();
             }
 
-        }
+        }*/
 
 
         //System.out.println("flag: "+flag);
