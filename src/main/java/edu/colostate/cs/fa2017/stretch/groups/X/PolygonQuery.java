@@ -96,10 +96,12 @@ private static final String cacheName = "STRETCH-CACHE";
         // Start Ignite node.
         Ignite ignite = Ignition.start(igniteConfiguration);
         ArrayList<Coordinates> queryPolygon = new ArrayList<>();
-        queryPolygon.add(new Coordinates((float) 47.51103144990631, (float)-140.2580379379143));
-        queryPolygon.add(new Coordinates((float) 47.153628870412874, (float)-137.2697566879143));
-        queryPolygon.add(new Coordinates((float) 46.4921042108587, (float)-139.3571590316643));
-        queryPolygon.add(new Coordinates((float) 47.51103144990631, (float)-140.2580379379143));
+        queryPolygon.add(new Coordinates((float) 45.64428760805095, (float)-145.57883261364352));
+        queryPolygon.add(new Coordinates((float) 47.561236856337445, (float)-137.95431089489352));
+        queryPolygon.add(new Coordinates((float) 50.1623839384541, (float)-135.69112730114352));
+        queryPolygon.add(new Coordinates((float) 48.472465501423436, (float)-143.95284605114352));
+        queryPolygon.add(new Coordinates((float) 45.64428760805095, (float)-145.57883261364352));
+
 
         long start = System.currentTimeMillis();
 

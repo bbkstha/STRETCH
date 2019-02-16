@@ -54,7 +54,7 @@ public class ClusterWorkerX {
             put("group",args[0]);
             put("role", "worker");
             put("donated","no");
-            put("region-max", "1200");
+            put("region-max", "200");
             put("split","no");
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);

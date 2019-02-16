@@ -3,14 +3,12 @@ package edu.colostate.cs.fa2017.stretch.util;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
+import java.lang.reflect.Array;
+import java.util.*;
 
 public class CheckSavedMap {
     public static void main(String[] args){
-
+/*
         Map<String, Integer> map = new HashMap<>();
         try
         {
@@ -37,6 +35,33 @@ public class CheckSavedMap {
             System.out.print("key: "+ mentry.getKey() + " & Value: ");
             System.out.println(mentry.getValue());
         }
+        */
+
+        int[] current = {5,6};
+        Map<String, Boolean> tmpMap = new HashMap<>();
+        String b = "1,2,3,4,";
+        String[] m = b.split(",");
+        for(int i=0; i< m.length; i++){
+            tmpMap.put(m[i],true);
+        }
+
+        System.out.println(tmpMap.size());
+        boolean flag = true;
+        while(flag){
+            for(int j = 0; j<current.length; j++){
+                if(tmpMap.containsKey(Integer.toString(current[j]))){
+                    break;
+                }
+                flag = false;
+            }
+            System.out.println("in the loop");
+        }
+
+        System.out.println("out of the loop");
+
+
+
+
 
     }
 }
