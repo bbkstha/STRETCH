@@ -48,7 +48,7 @@ public class ClusterMasterX {
     private static String hotspotPartitions = "";
     private static String localClusterHotspotNodeID = "";
     private static Map<UUID, Object> offerReceived = new HashMap<>();
-    private final static int nodesAllowedPerMachine = 4;
+    private static int nodesAllowedPerMachine = 2; //default 2
 
     public static void main(String[] args) {
 
@@ -60,7 +60,7 @@ public class ClusterMasterX {
             return;
         }
         String groupName = args[0];
-        Integer numberOfMastersExpected = Integer.parseInt(args[1]);
+        nodesAllowedPerMachine = Integer.parseInt(args[1]);
 
 
         IgniteConfiguration igniteConfiguration = new IgniteConfiguration();
@@ -81,7 +81,7 @@ public class ClusterMasterX {
         // Setting the size of the default memory region to 80MB to achieve this.
         regionCfg.setInitialSize(
                 50L * 1024 * 1024);
-        regionCfg.setMaxSize(1500L * 1024 * 1024);
+        regionCfg.setMaxSize(26000L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
@@ -97,7 +97,7 @@ public class ClusterMasterX {
             put("role", "master");
             put("donated", "no");
             put("split", "no");
-            put("region-max", "200");
+            put("region-max", "25000");
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setUserAttributes(userAtt);
@@ -252,14 +252,15 @@ public class ClusterMasterX {
                         }
                         Object reply = sender + "::" + idlenodeID;
 
-                        //System.out.println("OfferAcknowledged: "+reply);
+                        System.out.println("OfferAcknowledged: "+reply);
+                        System.out.println("Idle node to be used is: "+idlenodeID);
 
-                        if(usage < 0.4){
+                        if(usage < 0.3){
                             offerReceived.clear();
                             mastersMessanger.send(OFFER_ACKNOWLEDGED, reply);
                         }
                         else {
-                            //Spawn new JVM
+                            //Spawn new JVM from workers file
                         }
 
                     }
@@ -885,7 +886,7 @@ public class ClusterMasterX {
                         hotspotNodeID = maxCpuUsedID;
                     }
 
-                    if ((maxMemoryUsed > 0.9 || maxCpuUsed > 0.9)) {
+                    if ((maxMemoryUsed > 0.8 || maxCpuUsed > 0.8)) {
 
                         System.out.println("I am group: " + groupName + " and I reached a hotspot");
                         //System.out.println("Cause of hotspot: "+cause);
@@ -933,6 +934,35 @@ public class ClusterMasterX {
                         //System.out.println(reverseSortedMap);
                         //System.out.println(reverseSortedMap.size());
 
+                        String partitionToMove = "";
+                        int select = 0;
+                        double amountToTransfer = 0.0;
+
+                        //System.out.println("Current stat of hotspot: "+totalKeys * 697.05 / (1024 *1024));
+
+                        long threshold = (long) totalKeys * 5/10;
+                        //System.out.println(threshold);
+                        //int size = reverseSortedMap.size() / 2;
+                        int i = reverseSortedMap.size();
+                        for (Map.Entry<Integer, Long> e : reverseSortedMap.entrySet()) {
+                            //System.out.println("Partition is: "+e.getKey()+" and count is: "+e.getValue());
+                            if(i%2 == 0){
+
+                                System.out.println("i: "+i);
+                                partitionToMove = partitionToMove + e.getKey() + ",";
+                                System.out.println("partition to move: "+partitionToMove);
+                                System.out.println(e.getValue());
+                                threshold -= e.getValue();
+                                System.out.println(""+threshold);
+                                if (threshold < 100) {
+                                    System.out.println("break");
+                                    //System.out.println("Amount to transfer: " + amountToTransfer + " has surpassed threshold: " + threshold);
+                                    break;
+                                }
+                            }
+                            i--;
+                        }
+
 
 
 
@@ -941,54 +971,54 @@ public class ClusterMasterX {
                         //Try to find idle node within own cluster
 
                             Map.Entry<Double, UUID> leastUsedLocalWorker = ((TreeMap<Double, UUID>) offheapUsage).firstEntry();
-                            if (leastUsedLocalWorker.getKey() < 0.4) {
+                            if (leastUsedLocalWorker.getKey() < 0.3) {
 
                                 Iterator<Map.Entry<Double, UUID>> iterator = cpuUsage.entrySet().iterator();
                                 while (iterator.hasNext()) {
                                     Map.Entry<Double, UUID> entry = iterator.next();
                                     if (leastUsedLocalWorker.getValue() == entry.getValue()) {
-                                        if (entry.getKey() < 0.4) {
+                                        if (entry.getKey() < 0.3) {
 
-                                            String partitionToMove = "";
-                                            int select = 0;
-                                            double amountToTransfer = 0.0;
-
-                                            //System.out.println("Current stat of hotspot: "+totalKeys * 697.05 / (1024 *1024));
-                                            double maxMemoryAllocated = Double.parseDouble(ignite.cluster().forNodeId(leastUsedLocalWorker.getValue()).node().attribute("region-max")); //In MB
-                                            long idleNodeKeysEstimate = Double.valueOf(leastUsedLocalWorker.getKey() * maxMemoryAllocated *(1024 * 1024) / 697.05).longValue();
-                                            long maxKeysIdleNodeCouldTake = Double.valueOf(0.7 * maxMemoryAllocated *(1024 * 1024) / 697.05).longValue();
-
-                                            long threshold = maxKeysIdleNodeCouldTake - idleNodeKeysEstimate;
-
-                                            System.out.println("idlenodeestimate: "+idleNodeKeysEstimate);
-                                            System.out.println("maxestimate: "+maxKeysIdleNodeCouldTake);
-                                            System.out.println("threshold"+threshold);
-                                            if(maxKeysIdleNodeCouldTake - threshold < 1000){
-                                                System.out.println("Idle node is empty.");
-                                                threshold = maxKeysIdleNodeCouldTake * 4/5;
-                                            }
-                                            System.out.println("threshold"+threshold);
-
-                                            int i = reverseSortedMap.size();
-                                            System.out.println(i);
-                                            for (Map.Entry<Integer, Long> e : reverseSortedMap.entrySet()) {
-                                                //System.out.println("Partition is: "+e.getKey()+" and count is: "+e.getValue());
-                                                if(i%2 == 0){
-
-                                                    System.out.println("i: "+i);
-                                                    partitionToMove = partitionToMove + e.getKey() + ",";
-                                                    System.out.println("partition to move: "+partitionToMove);
-                                                    System.out.println(e.getValue());
-                                                    threshold -= e.getValue();
-                                                    System.out.println(""+threshold);
-                                                    if (threshold < 100) {
-                                                        System.out.println("break");
-                                                        //System.out.println("Amount to transfer: " + amountToTransfer + " has surpassed threshold: " + threshold);
-                                                        break;
-                                                    }
-                                                }
-                                                i--;
-                                            }
+//                                            String partitionToMove = "";
+//                                            int select = 0;
+//                                            double amountToTransfer = 0.0;
+//
+//                                            //System.out.println("Current stat of hotspot: "+totalKeys * 697.05 / (1024 *1024));
+//                                            double maxMemoryAllocated = Double.parseDouble(ignite.cluster().forNodeId(leastUsedLocalWorker.getValue()).node().attribute("region-max")); //In MB
+//                                            long idleNodeKeysEstimate = Double.valueOf(leastUsedLocalWorker.getKey() * maxMemoryAllocated *(1024 * 1024) / 697.05).longValue();
+//                                            long maxKeysIdleNodeCouldTake = Double.valueOf(0.6 * maxMemoryAllocated *(1024 * 1024) / 697.05).longValue();
+//
+//                                            long threshold = maxKeysIdleNodeCouldTake - idleNodeKeysEstimate;
+//
+//                                            /*System.out.println("idlenodeestimate: "+idleNodeKeysEstimate);
+//                                            System.out.println("maxestimate: "+maxKeysIdleNodeCouldTake);
+//                                            System.out.println("threshold"+threshold);
+//                                            if(maxKeysIdleNodeCouldTake - threshold < 1000){
+//                                                System.out.println("Idle node is empty.");
+//                                                threshold = maxKeysIdleNodeCouldTake * 4/5;
+//                                            }
+//                                            System.out.println("threshold"+threshold);*/
+//
+//                                            int i = reverseSortedMap.size();
+//                                            System.out.println(i);
+//                                            for (Map.Entry<Integer, Long> e : reverseSortedMap.entrySet()) {
+//                                                //System.out.println("Partition is: "+e.getKey()+" and count is: "+e.getValue());
+//                                                if(i%2 == 0){
+//
+//                                                    System.out.println("i: "+i);
+//                                                    partitionToMove = partitionToMove + e.getKey() + ",";
+//                                                    System.out.println("partition to move: "+partitionToMove);
+//                                                    System.out.println(e.getValue());
+//                                                    threshold -= e.getValue();
+//                                                    System.out.println(""+threshold);
+//                                                    if (threshold < 100) {
+//                                                        System.out.println("break");
+//                                                        //System.out.println("Amount to transfer: " + amountToTransfer + " has surpassed threshold: " + threshold);
+//                                                        break;
+//                                                    }
+//                                                }
+//                                                i--;
+//                                            }
 
                                             //System.out.println("The Partitions to move is: " + partitionToMove);
                                             hotspotPartitions = partitionToMove;
@@ -1102,28 +1132,11 @@ public class ClusterMasterX {
 
 
 
+                        System.out.println("Could not find local idle node.");
 
-                        String partitionToMove = "";
-                        int select = 0;
-                        double amountToTransfer = 0.0;
 
-                        //System.out.println("Current stat of hotspot: "+totalKeys * 697.05 / (1024 *1024));
 
-                        long threshold = (long) totalKeys * 6/10;
-                        //System.out.println(threshold);
-                        //int size = reverseSortedMap.size() / 2;
-                        for (Map.Entry<Integer, Long> e : reverseSortedMap.entrySet()) {
-                            //System.out.println("Partition is: "+e.getKey()+" and count is: "+e.getValue());
-                            partitionToMove = partitionToMove + e.getKey() + ",";
-                            threshold-=e.getValue();
-                            //size--;
-                            if (threshold < 100) {
-                                //System.out.println("Amount to transfer: " + amountToTransfer + " has surpassed threshold: " + threshold);
-                                break;
-                            }
-                        }
-
-                        System.out.println("The Partitions to move is: " + partitionToMove);
+                        System.out.println("The Partitions to be moved on remote idle node is: " + partitionToMove);
                         hotspotPartitions = partitionToMove;
                         alreadyRequested = true;
                         localClusterHotspotNodeID = hotspotNodeID.toString();

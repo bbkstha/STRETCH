@@ -16,6 +16,7 @@ import org.apache.ignite.configuration.IgniteConfiguration;
 import javax.cache.Cache;
 import javax.xml.crypto.Data;
 import java.io.*;
+import java.math.BigInteger;
 import java.util.*;
 
 public class DataLoader {
@@ -89,7 +90,7 @@ public class DataLoader {
             put("group","loader");
             put("role", "client");
             put("donated","no");
-            put("region-max", "100");
+            put("region-max", "200");
             put("split","no");
             put("map","/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-2.7.0-bin/STRETCH/KeyToPartitionMap-X.ser");
 
@@ -119,7 +120,7 @@ public class DataLoader {
         File[] listOfFiles = folder.listFiles();
         String strLine;
         BufferedReader bufferReader = null;
-        int counter = 0;
+        long counter = 0;
 
         GeoEntry tmpGeoEntry = null;
 

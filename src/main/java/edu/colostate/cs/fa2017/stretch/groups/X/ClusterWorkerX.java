@@ -40,7 +40,7 @@ public class ClusterWorkerX {
         // Setting the size of the default memory region tevent.equalsIgnoreCase("NODE-JOINED")o 100MB to achieve this.
         regionCfg.setInitialSize(
                 50L * 1024 * 1024);
-        regionCfg.setMaxSize(1500L * 1024 * 1024);
+        regionCfg.setMaxSize(26000L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
 
@@ -54,7 +54,7 @@ public class ClusterWorkerX {
             put("group",args[0]);
             put("role", "worker");
             put("donated","no");
-            put("region-max", "200");
+            put("region-max", "25000");
             put("split","no");
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);

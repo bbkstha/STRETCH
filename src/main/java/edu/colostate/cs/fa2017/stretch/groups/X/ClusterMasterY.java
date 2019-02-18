@@ -1,33 +1,22 @@
 package edu.colostate.cs.fa2017.stretch.groups.X;
 
-
+import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionXX;
 import org.apache.ignite.Ignite;
-import org.apache.ignite.IgniteCache;
-import org.apache.ignite.IgniteMessaging;
 import org.apache.ignite.Ignition;
 import org.apache.ignite.cache.CacheMode;
-import org.apache.ignite.cache.CachePeekMode;
 import org.apache.ignite.cache.CacheRebalanceMode;
-import org.apache.ignite.cache.query.ScanQuery;
-import org.apache.ignite.cluster.ClusterGroup;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.DataRegionConfiguration;
 import org.apache.ignite.configuration.DataStorageConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
-import org.apache.ignite.lang.IgniteClosure;
 
-import javax.cache.Cache;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
 
 public class ClusterMasterY {
 
     private static final String cacheName = "STRETCH-CACHE";
     private static final String dataRegionName = "150MB_Region";
-
-    private static boolean alreadyRequested = false;
-
-
-
 
     public static void main(String[] args){
 
@@ -42,9 +31,10 @@ public class ClusterMasterY {
         cacheConfiguration.setName(cacheName);
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        /*StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 1056);
-        cacheConfiguration.setAffinity(stretchAffinityFunctionXX);*/
+        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 6400);
+        cacheConfiguration.setAffinity(stretchAffinityFunctionXX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
+
 
 
 
@@ -53,121 +43,42 @@ public class ClusterMasterY {
         DataRegionConfiguration regionCfg = new DataRegionConfiguration();
         // Region name.
         regionCfg.setName(dataRegionName);
-        // Setting the size of the default memory region to 80MB to achieve this.
+        // Setting the size of the default memory region tevent.equalsIgnoreCase("NODE-JOINED")o 100MB to achieve this.
         regionCfg.setInitialSize(
                 50L * 1024 * 1024);
-        regionCfg.setMaxSize(500L * 1024 * 1024);
+        regionCfg.setMaxSize(26000L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
+
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
         // Setting the data region configuration.
         storageCfg.setDefaultDataRegionConfiguration(regionCfg);
         // Applying the new configuration.
         igniteConfiguration.setDataStorageConfiguration(storageCfg);
-
+        igniteConfiguration.setRebalanceThreadPoolSize(4);
         Map<String, String> userAtt = new HashMap<String, String>() {{
             put("group",groupName);
             put("role", "master");
             put("donated","no");
-            put("region-max", "500");
+            put("region-max", "25000");
             put("split","no");
-            put("keyToSplit","bbk");
-            put("partitionToSplit","1042");
-            put("map","./hashmap.ser");
-
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setUserAttributes(userAtt);
-        igniteConfiguration.setClientMode(true);
-        igniteConfiguration.setRebalanceThreadPoolSize(4);
-
+        igniteConfiguration.setClientMode(false);
 
         // Start Ignite node.
         Ignite ignite = Ignition.start(igniteConfiguration);
 
-            ClusterGroup masterGroup = ignite.cluster().forAttribute("role", "master");
+            //ClusterGroup masterGroup = ignite.cluster().forAttribute("role", "master");
 
-            IgniteMessaging mastersMessanger = ignite.message(masterGroup);
-            Map<UUID, Object> offerReceived = new HashMap<>();
-
-        ignite.compute(ignite.cluster().forAttribute("role","master").forRemotes()).apply(
-                new IgniteClosure<Integer, Integer>() {
-                    @Override
-                    public Integer apply(Integer x) {
-
-                        String arg = "47.76976,-139.85048,1388538000000";
-
-                        CacheConfiguration tmpCacheConfiguration = new CacheConfiguration("TMP-CACHE");
-                        tmpCacheConfiguration.setCacheMode(CacheMode.LOCAL);
-                        IgniteCache<DataLoader.GeoEntry, String> tmpCache = ignite.createCache(tmpCacheConfiguration);
-                        DataLoader.GeoEntry testKey = new DataLoader.GeoEntry(Double.parseDouble("47.76976"), Double.parseDouble("-139.85048"),12,"1388538000000");
-
-                        int prevPart = ignite.affinity(cacheName).partition(testKey);
-                        System.out.println("Previous partition ID is: "+prevPart);
-
-                        IgniteCache<DataLoader.GeoEntry, String> localCache = ignite.cache(cacheName);
-
-                        Iterator<Cache.Entry<DataLoader.GeoEntry, String>> it = localCache.localEntries(CachePeekMode.OFFHEAP).iterator();
-                        int i=0;
-                        while(it.hasNext()){
-                            i++;
-                            Cache.Entry<DataLoader.GeoEntry, String> e = it.next();
-                            System.out.println("FROM ANOTHER: "+i);
-                            tmpCache.put(e.getKey(), e.getValue());
-                            System.out.println(localCache.remove(e.getKey()));
-                            System.out.println(""+i+". "+e.getKey()+" and value: "+e.getValue());
-                            try {
-                                Thread.sleep(1);
-                            } catch (InterruptedException e1) {
-                                e1.printStackTrace();
-                            }
-                        }
-                        boolean flag = true;
-
-                        while(flag){
-                            System.out.println("New partition ID is: "+ignite.affinity(cacheName).partition(testKey));
-                            try {
-                                Thread.sleep(5000);
-                            } catch (InterruptedException e) {
-                                e.printStackTrace();
-                            }
-                            if(ignite.affinity(cacheName).partition(testKey) !=prevPart){
-                                System.out.println("New partition ID is: "+ignite.affinity(cacheName).partition(testKey));
-                                flag = false;
-                                System.out.println(flag);
-                            }
-                        }
-
-                        Iterator<Cache.Entry<DataLoader.GeoEntry, String>> itr = tmpCache.localEntries(CachePeekMode.OFFHEAP).iterator();
-                        while(itr.hasNext()) {
-
-                            Cache.Entry<DataLoader.GeoEntry, String> e = itr.next();
-                            localCache.put(e.getKey(), e.getValue());
-                            tmpCache.remove(e.getKey());
-                        }
+            //IgniteMessaging mastersMessanger = ignite.message(masterGroup);
+            //Map<UUID, Object> offerReceived = new HashMap<>();
 
 
-                        ScanQuery scanQuery = new ScanQuery();
-                        scanQuery.setPartition(prevPart);
-                        // Execute the query.
-                        Iterator<Cache.Entry<DataLoader.GeoEntry, String>> iterator1 = localCache.query(scanQuery).iterator();
-                        int c1 = 0;
-                        while (iterator1.hasNext()) {
-                            Cache.Entry<DataLoader.GeoEntry, String> remainder = iterator1.next();
-                            //System.out.println("The remaining key in 330 is: "+x.getKey());
-                            localCache.put(remainder.getKey(), remainder.getValue());
-                            c1++;
-                        }
-                        System.out.println(c1);
 
 
-                        return 1;
-                    }
-                },
-                330
-        );
-/*
-            //All other listeners here!!
+/*            //All other listeners here!!
 
             //4.Listen for offer grant
             mastersMessanger.remoteListen(OFFER_GRANTED, new IgniteBiPredicate<UUID, Object>() {
@@ -291,8 +202,9 @@ public class ClusterMasterY {
                     }
                     return true;
                 }
-            });
-*/
+            });*/
+
+
 
     }
 }

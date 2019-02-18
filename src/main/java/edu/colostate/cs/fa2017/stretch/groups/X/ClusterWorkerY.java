@@ -13,7 +13,7 @@ import org.apache.ignite.configuration.IgniteConfiguration;
 import java.util.HashMap;
 import java.util.Map;
 
-public class ClusterWorkerZ {
+public class ClusterWorkerY {
     private static final String cacheName = "STRETCH-CACHE";
     private static final String dataRegionName = "150MB_Region";
 
