@@ -2,6 +2,7 @@ package edu.colostate.cs.fa2017.stretch.groups.X;
 
 import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionXX;
 import edu.colostate.cs.fa2017.stretch.util.FileEditor;
+import edu.colostate.cs.fa2017.stretch.util.GeoHashProcessor.GeoHash;
 import edu.colostate.cs.fa2017.stretch.util.SortMapUsingValue;
 import org.apache.commons.collections.map.HashedMap;
 import org.apache.ignite.*;
@@ -19,6 +20,12 @@ import org.apache.ignite.configuration.IgniteConfiguration;
 import org.apache.ignite.internal.IgniteInterruptedCheckedException;
 import org.apache.ignite.lang.IgniteBiPredicate;
 import org.apache.ignite.lang.IgniteClosure;
+import org.apache.log4j.Appender;
+import org.apache.log4j.FileAppender;
+import org.apache.log4j.Logger;
+import org.apache.log4j.SimpleLayout;
+import org.joda.time.DateTime;
+import org.joda.time.LocalDateTime;
 
 import javax.cache.Cache;
 import java.io.*;
@@ -41,8 +48,9 @@ public class ClusterMasterX {
     private static final String OFFER_TOPIC = "Resource_Offered";
     private static final String OFFER_ACKNOWLEDGED = "Resource_Acknowledged";
     private static final String OFFER_GRANTED = "Resource_Granted";
+    private static double keyValuePairSize = 2080.0;
 
-    private static final String dataRegionName = "150MB_Region";
+    private static final String dataRegionName = "50GB_Region";
 
     private static boolean alreadyRequested = false;
     private static String hotspotPartitions = "";
@@ -50,7 +58,31 @@ public class ClusterMasterX {
     private static Map<UUID, Object> offerReceived = new HashMap<>();
     private static int nodesAllowedPerMachine = 2; //default 2
 
+    private static Map<String, Integer> keyToPartitionMapForCluster = new HashMap<>();
+
+   // private static Logger logger = Logger.getLogger("MyLog");
+
+
+
+
     public static void main(String[] args) {
+
+
+        /*Appender fh = null;
+        try {
+            fh = new FileAppender(new SimpleLayout(), "MyLogFile.log");
+            logger.addAppender(fh);
+            fh.setLayout(new SimpleLayout());
+            logger.info("Entered the main method of Master X.");
+        } catch (SecurityException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }*/
+
+
+
+
 
         SortMapUsingValue sortMapUsingValue = new SortMapUsingValue();
         sortMapUsingValue.initializeMap();
@@ -68,7 +100,7 @@ public class ClusterMasterX {
         cacheConfiguration.setName(cacheName);
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 6400);
+        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 25000);
         cacheConfiguration.setAffinity(stretchAffinityFunctionXX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
         cacheConfiguration.setOnheapCacheEnabled(false);
@@ -81,7 +113,7 @@ public class ClusterMasterX {
         // Setting the size of the default memory region to 80MB to achieve this.
         regionCfg.setInitialSize(
                 50L * 1024 * 1024);
-        regionCfg.setMaxSize(26000L * 1024 * 1024);
+        regionCfg.setMaxSize(52224L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
@@ -97,7 +129,7 @@ public class ClusterMasterX {
             put("role", "master");
             put("donated", "no");
             put("split", "no");
-            put("region-max", "25000");
+            put("region-max", "51200");
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
         igniteConfiguration.setUserAttributes(userAtt);
@@ -152,6 +184,11 @@ public class ClusterMasterX {
                         Map<String, Object> dflts = null;
 
                         System.out.println("Starting new node for partition transfer!!!!!");
+                        System.out.println("*************************************************");
+                        System.out.println(LocalDateTime.now());
+                        System.out.println("The partitions: "+hotPartitions+" are being transferred from: "+localClusterHotspotNodeID+" to: "+idleNodeTobeUsed);
+                        System.out.println("*************************************************");
+
 
                         ignite.cluster().startNodes(hostNames, dflts, false, 10000, nodesAllowedPerMachine);
 
@@ -201,6 +238,9 @@ public class ClusterMasterX {
                         Object reply = nodeId + "::" + msg.toString().split("::")[1];
 
                         //System.out.println("Offer Granted: "+reply);
+                        System.out.println("***********************************");
+                        System.out.println("REMOTE IDLE NODE TO BE USED: "+msg.toString().split("::")[1]);
+                        System.out.println("***********************************");
                         mastersMessanger.send(OFFER_GRANTED, reply);
                     }
                     return true;
@@ -303,7 +343,7 @@ public class ClusterMasterX {
                                                     sum+= ignite.cache(cacheName).localSizeLong(localParts[i], CachePeekMode.OFFHEAP);
                                                 }
 
-                                                double totalMemoryUsed = sum * 697.05 / (double) (1024 * 1024);
+                                                double totalMemoryUsed = sum * keyValuePairSize / (double) (1024 * 1024);
 
                                                 String stat = "" + totalMemoryUsed + ", "
                                                         + metrics.getCurrentCpuLoad();
@@ -500,7 +540,7 @@ public class ClusterMasterX {
                             //System.out.println("Region max: "+maxMemoryAllocated);
                             //System.out.println("Used : "+remoteDataRegionMetrics.split(",")[0]);
                             long totalKeyCount = partIDToKeyCount.get(-1);
-                            double totalMemoryUsed = (totalKeyCount * 697.05 / (double) (1024 * 1024));
+                            double totalMemoryUsed = (totalKeyCount * keyValuePairSize / (double) (1024 * 1024));
                             double memoryUsageProp = totalMemoryUsed / maxMemoryAllocated;
                             double rate = memoryUsageProp / (double) (System.currentTimeMillis() - startTimeInMilli);
                             double cpuUsageProp = partIDToKeyCount.get(-2) / (double) 100000.0;
@@ -675,6 +715,8 @@ public class ClusterMasterX {
                                             }
 
 
+
+
                                             //Save to modified KeyToPartitionMap
                                             FileChannel channel2 = new RandomAccessFile(file, "rw").getChannel();
                                             FileLock lock2 = channel2.lock(); //Lock the file. Block until release the lock
@@ -685,6 +727,14 @@ public class ClusterMasterX {
                                             System.out.println("UNLOCKED.");
                                             oos.close();
                                             channel2.close();
+
+                                            keyToPartitionMapForCluster = keyToPartitionMap;
+
+                                            System.out.println("***********************************");
+                                            System.out.println("POWER LAW: HOT PARTITIONS ARE: "+skewedKeys);
+                                            System.out.println("POWER LAW: START PART to END PART: "+startSplit+" & "+endSplit);
+                                            System.out.println("***********************************");
+
                                         } catch (FileNotFoundException e) {
                                             e.printStackTrace();
                                         } catch (IOException e) {
@@ -764,6 +814,8 @@ public class ClusterMasterX {
                                                     hostConfig.add(tmpMap);
                                                     Map<String, Object> dflts = null;
                                                     System.out.println("Starting partition split node!!!!!");
+
+
                                                     ignite.cluster().startNodes(hostConfig, dflts, false, 10000, nodesAllowedPerMachine);
 
                                                     //Now wait until partition split is apparent
@@ -886,7 +938,7 @@ public class ClusterMasterX {
                         hotspotNodeID = maxCpuUsedID;
                     }
 
-                    if ((maxMemoryUsed > 0.8 || maxCpuUsed > 0.8)) {
+                    if ((maxMemoryUsed > 0.9 || maxCpuUsed > 0.9)) {
 
                         System.out.println("I am group: " + groupName + " and I reached a hotspot");
                         //System.out.println("Cause of hotspot: "+cause);
@@ -900,7 +952,7 @@ public class ClusterMasterX {
                                     public Map<Integer, Long> apply(Integer x) {
 
                                         //System.out.println("Inside hotspot node!");
-                                        Map<Integer, Long> localCountToPart = new HashMap<>();
+                                        Map<Integer, Long> localCountToPart = new TreeMap<>();
                                         //System.out.println("Again The size of partition asssociated with hotspot is: " + localParts.length);
                                         long totalKeys = 0;
                                         for (int i = 0; i < localParts.length; i++) {
@@ -927,12 +979,24 @@ public class ClusterMasterX {
                                 Implementation required
                                  */
 
+                        int smallestPart = ((TreeMap<Integer, Long>) partitionToCount).firstEntry().getKey();
+                        int largestPart = ((TreeMap<Integer, Long>) partitionToCount).lastEntry().getKey();
+
                         //Alternate partition selection approach
                         LinkedHashMap<Integer, Long> reverseSortedMap = new LinkedHashMap<>();
                         partitionToCount.entrySet().stream().sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
                                 .forEachOrdered(x -> reverseSortedMap.put(x.getKey(), x.getValue()));
                         //System.out.println(reverseSortedMap);
                         //System.out.println(reverseSortedMap.size());
+
+                        //group partitions based on their neighborhood information
+                        List<Integer> partitionList = new ArrayList<>();
+                        for (Map.Entry<Integer, Long> e : partitionToCount.entrySet()) {
+                            partitionList.add(e.getKey());
+                        }
+
+
+
 
                         String partitionToMove = "";
                         int select = 0;
@@ -943,7 +1007,7 @@ public class ClusterMasterX {
                         long threshold = (long) totalKeys * 5/10;
                         //System.out.println(threshold);
                         //int size = reverseSortedMap.size() / 2;
-                        int i = reverseSortedMap.size();
+                        /*int i = reverseSortedMap.size();
                         for (Map.Entry<Integer, Long> e : reverseSortedMap.entrySet()) {
                             //System.out.println("Partition is: "+e.getKey()+" and count is: "+e.getValue());
                             if(i%2 == 0){
@@ -961,7 +1025,38 @@ public class ClusterMasterX {
                                 }
                             }
                             i--;
+                        }*/
+
+                        Iterator<Map.Entry<Integer, Long>> itr = reverseSortedMap.entrySet().iterator();
+                        int firstElem = itr.next().getKey();
+                        if(threshold > 1000){
+                            int startingPart = itr.next().getKey();
+                            threshold = (long) totalKeys * 5/10;
+                            partitionToMove = "";
+                            int i = 1;
+                            partitionToMove = partitionToMove + startingPart + ",";
+                            threshold -= reverseSortedMap.get(startingPart);
+                            System.out.println(""+threshold);
+                            while(startingPart+i <= largestPart || startingPart -i >=smallestPart) {
+                                if(partitionToCount.containsKey(startingPart+i)){
+                                    partitionToMove = partitionToMove + (startingPart+i) + ",";
+                                    threshold -= partitionToCount.get(startingPart+i);
+                                }else if(partitionToCount.containsKey(startingPart-i)){
+                                    partitionToMove = partitionToMove + (startingPart-i) + ",";
+                                    threshold -= partitionToCount.get(startingPart-i);
+                                }
+                                i++;
+                                if (threshold < 1000 && threshold > -15000) {
+                                    System.out.println("break");
+                                    //System.out.println("Amount to transfer: " + amountToTransfer + " has surpassed threshold: " + threshold);
+                                    break;
+                                }
+                            }
                         }
+
+                        System.out.println("selective partititon to move: "+partitionToMove);
+
+
 
 
 
@@ -1026,6 +1121,10 @@ public class ClusterMasterX {
                                             System.out.println("Local idle worker used.");
                                             alreadyRequested = true;
                                             localClusterHotspotNodeID = hotspotNodeID.toString();
+
+                                            System.out.println("***********************************");
+                                            System.out.println("LOCAL IDLE TO BE USED: "+leastUsedLocalWorker.getValue());
+                                            System.out.println("***********************************");
                                             mastersMessanger.send(OFFER_GRANTED, localDonation);
                                             return true;
                                         }

@@ -35,6 +35,8 @@ private static final String cacheName = "STRETCH-CACHE";
 
     public final static byte BITS_PER_CHAR = 5;
     public final static int MAX_PRECISION = 30;
+    public final static int LATITUDE_RANGE = 90;
+    public final static int LONGITUDE_RANGE = 180;
 
 
     public final static char[] charMap = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'b', 'c', 'd', 'e', 'f',
@@ -432,6 +434,78 @@ private static final String cacheName = "STRETCH-CACHE";
         }
         return map;
     }
+
+    public static String[] getNeighbours(String geoHash) {
+        String[] neighbors = new String[8];
+        if (geoHash == null || geoHash.trim().length() == 0)
+            throw new IllegalArgumentException("Invalid Geohash");
+        geoHash = geoHash.trim();
+        int precision = geoHash.length();
+        SpatialRange boundingBox = decodeHash(geoHash);
+        Coordinates centroid = boundingBox.getCenterPoint();
+        float widthDiff = boundingBox.getUpperBoundForLongitude() - centroid.getLongitude();
+        float heightDiff = boundingBox.getUpperBoundForLatitude() - centroid.getLatitude();
+        neighbors[0] = encode(boundingBox.getUpperBoundForLatitude() + heightDiff,
+                boundingBox.getLowerBoundForLongitude() - widthDiff, precision);
+        neighbors[1] = encode(boundingBox.getUpperBoundForLatitude() + heightDiff, centroid.getLongitude(), precision);
+        neighbors[2] = encode(boundingBox.getUpperBoundForLatitude() + heightDiff,
+                boundingBox.getUpperBoundForLongitude() + widthDiff, precision);
+        neighbors[3] = encode(centroid.getLatitude(), boundingBox.getLowerBoundForLongitude() - widthDiff, precision);
+        neighbors[4] = encode(centroid.getLatitude(), boundingBox.getUpperBoundForLongitude() + widthDiff, precision);
+        neighbors[5] = encode(boundingBox.getLowerBoundForLatitude() - heightDiff,
+                boundingBox.getLowerBoundForLongitude() - widthDiff, precision);
+        neighbors[6] = encode(boundingBox.getLowerBoundForLatitude() - heightDiff, centroid.getLongitude(), precision);
+        neighbors[7] = encode(boundingBox.getLowerBoundForLatitude() - heightDiff,
+                boundingBox.getUpperBoundForLongitude() + widthDiff, precision);
+        return neighbors;
+    }
+    public static String encode(float latitude, float longitude, int precision) {
+        while (latitude < -90f || latitude > 90f)
+            latitude = latitude < -90f ? 180.0f + latitude : latitude > 90f ? -180f + latitude : latitude;
+        while (longitude < -180f || longitude > 180f)
+            longitude = longitude < -180f ? 360.0f + longitude : longitude > 180f ? -360f + longitude : longitude;
+        /*
+         * Set up 2-element arrays for longitude and latitude that we can flip
+         * between while encoding
+         */
+        float[] high = new float[2];
+        float[] low = new float[2];
+        float[] value = new float[2];
+
+        high[0] = LONGITUDE_RANGE;
+        high[1] = LATITUDE_RANGE;
+        low[0] = -LONGITUDE_RANGE;
+        low[1] = -LATITUDE_RANGE;
+        value[0] = longitude;
+        value[1] = latitude;
+
+        String hash = "";
+
+        for (int p = 0; p < precision; ++p) {
+
+            float middle = 0.0f;
+            int charBits = 0;
+            for (int b = 0; b < BITS_PER_CHAR; ++b) {
+                int bit = (p * BITS_PER_CHAR) + b;
+
+                charBits <<= 1;
+
+                middle = (high[bit % 2] + low[bit % 2]) / 2;
+                if (value[bit % 2] > middle) {
+                    charBits |= 1;
+                    low[bit % 2] = middle;
+                } else {
+                    high[bit % 2] = middle;
+                }
+            }
+
+            hash += charMap[charBits];
+        }
+
+        return hash;
+    }
+
+
 
 
 }

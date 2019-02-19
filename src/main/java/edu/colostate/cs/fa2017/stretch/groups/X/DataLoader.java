@@ -9,6 +9,7 @@ import org.apache.ignite.cache.affinity.AffinityKeyMapped;
 import org.apache.ignite.cache.query.ScanQuery;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
+import org.apache.ignite.configuration.DataRegionConfiguration;
 import org.apache.ignite.configuration.DataStorageConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
 
@@ -36,19 +37,19 @@ public class DataLoader {
         // Changing total RAM size to be used by Ignite Node.
         DataStorageConfiguration storageCfg = new DataStorageConfiguration();
 
- /*       DataRegionConfiguration regionCfg = new DataRegionConfiguration();
+        DataRegionConfiguration regionCfg = new DataRegionConfiguration();
 
         regionCfg.setMetricsEnabled(true);
 
         // Region name.
-        regionCfg.setName("300MB_Region");
+        regionCfg.setName("Client_Region");
         // Setting the size of the default memory region to 80MB to achieve this.
         regionCfg.setInitialSize(
                 50L * 1024 * 1024);
         regionCfg.setMaxSize(300L * 1024 * 1024);
 
         // Enable persistence for the region.
-        regionCfg.setPersistenceEnabled(false);*/
+        regionCfg.setPersistenceEnabled(false);
 
 
         // Setting the size of the default memory region to 4GB to achieve this.
@@ -77,7 +78,7 @@ public class DataLoader {
 
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 6400);
+        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 64000);
         cacheConfiguration.setAffinity(stretchAffinityFunctionXX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
         cacheConfiguration.setStatisticsEnabled(true);
@@ -116,8 +117,19 @@ public class DataLoader {
 
 //            for(int i=0; i<100000000; i++)
 //                cache.put(Integer.toString(i),Integer.toString(i));
-        File folder = new File(path);
-        File[] listOfFiles = folder.listFiles();
+
+
+
+
+//        File folder = new File(path);
+//        String[] innerFolders = folder.list();
+//        File[] listOfFiles = folder.listFiles();
+        List<File> fileList = listf(path);
+        System.out.println("Number of files: "+fileList.size());
+
+
+
+
         String strLine;
         BufferedReader bufferReader = null;
         long counter = 0;
@@ -133,10 +145,15 @@ public class DataLoader {
             oldFile.delete();
         }
 
+        System.out.println("Waiting");
+        Thread.sleep(10000);
+
+
+
         BufferedWriter bw = null;
         bw = new BufferedWriter(new FileWriter(outputFileName));
 
-        for (File file : listOfFiles) {
+        for (File file : fileList) {
                 InputStream inputStream = new FileInputStream(file.getPath());
                 InputStreamReader streamReader = new InputStreamReader(inputStream);
                 BufferedReader br = new BufferedReader(streamReader);
@@ -145,15 +162,24 @@ public class DataLoader {
 
                         counter++;
                         //System.out.println(counter);
-                        double lat = Double.parseDouble(strLine.split(",")[0]);
-                        double lon = Double.parseDouble(strLine.split(",")[1]);
-                        String timestamp = strLine.split(",")[2];
+                        //strLine.split(",")[0].indexOf(".")
+                        String[] eachColumn = strLine.split(",");
+                        double lat = Double.parseDouble(eachColumn[0]);
+                        double lon = Double.parseDouble(eachColumn[1]);
+                        String timestamp = eachColumn[2]; //.substring(0, eachColumn[2].indexOf("."));
+
+
 
                         GeoEntry geoEntry = new GeoEntry(lat, lon, 12, timestamp);
-
+                       /* String value = lat+","+lon+","+timestamp+",";
+                        for(int i=3; i<eachColumn.length;i++)
+                            value += eachColumn[i].substring(0, eachColumn[i].indexOf(".")+1)+",";*/
+                        //System.out.println(value);
                         //System.out.println("The geohash is: "+geoEntry.geoHash);
                         //System.out.println("Counter: "+counter);
                         cache.put(geoEntry, strLine);
+
+                        //Thread.sleep(1000);
 
                        // Thread.sleep(1);
                         //byte[] arr = ignite.configuration().getMarshaller().marshal(new GeoEntry(lat, lon, 5, timestamp));
@@ -445,4 +471,27 @@ public class DataLoader {
         }
 
     }
+
+
+    public static List<File> listf(String directoryName) {
+        File directory = new File(directoryName);
+
+        List<File> resultList = new ArrayList<File>();
+
+        // get all the files from a directory
+        File[] fList = directory.listFiles();
+        resultList.addAll(Arrays.asList(fList));
+        for (File file : fList) {
+            if (file.isFile()) {
+                //System.out.println(file.getAbsolutePath());
+            } else if (file.isDirectory()) {
+                resultList.remove(file);
+                resultList.addAll(listf(file.getAbsolutePath()));
+            }
+        }
+        //System.out.println(fList);
+        return resultList;
+    }
+
 }
+

@@ -16,7 +16,7 @@ import java.util.Map;
 public class ClusterMasterY {
 
     private static final String cacheName = "STRETCH-CACHE";
-    private static final String dataRegionName = "150MB_Region";
+    private static final String dataRegionName = "50GB_Region";
 
     public static void main(String[] args){
 
@@ -31,7 +31,7 @@ public class ClusterMasterY {
         cacheConfiguration.setName(cacheName);
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 6400);
+        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 25000);
         cacheConfiguration.setAffinity(stretchAffinityFunctionXX);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
 
@@ -46,7 +46,7 @@ public class ClusterMasterY {
         // Setting the size of the default memory region tevent.equalsIgnoreCase("NODE-JOINED")o 100MB to achieve this.
         regionCfg.setInitialSize(
                 50L * 1024 * 1024);
-        regionCfg.setMaxSize(26000L * 1024 * 1024);
+        regionCfg.setMaxSize(52224L * 1024 * 1024);
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
 
@@ -60,7 +60,7 @@ public class ClusterMasterY {
             put("group",groupName);
             put("role", "master");
             put("donated","no");
-            put("region-max", "25000");
+            put("region-max", "51200");
             put("split","no");
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
