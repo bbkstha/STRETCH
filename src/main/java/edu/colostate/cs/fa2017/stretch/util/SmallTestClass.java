@@ -1,5 +1,6 @@
 package edu.colostate.cs.fa2017.stretch.util;
 
+import java.io.DataOutput;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -14,14 +15,18 @@ public class SmallTestClass {
 
        /* String d = "-77.5590057373046900";
         System.out.println(d.substring(0, d.indexOf(".")));*/
-        List<File> list = listf("/s/chopin/b/grad/bbkstha/stretch/data");
+        /*List<File> list = listf("/s/chopin/b/grad/bbkstha/stretch/data");
         System.out.println(list.size());
 
         for(File f: list){
             System.out.println(f.getPath());
-        }
+        }*/
 
-
+        double cpu= 0.0033333333333333335;
+        long c = (long) (cpu*1000000000);
+        double pc = c / 1000000000.0;
+        System.out.println(c);
+        System.out.println(pc);
 
     }
 

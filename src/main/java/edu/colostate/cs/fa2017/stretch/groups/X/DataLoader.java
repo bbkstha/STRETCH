@@ -104,9 +104,14 @@ public class DataLoader {
 
         //ignite.cluster().resetMetrics();
         IgniteCache<GeoEntry, String> cache = ignite.getOrCreateCache(cacheConfiguration);
+
         cache.clear();
 
-        Affinity affinity = ignite.affinity(cacheName);
+
+       IgniteDataStreamer<GeoEntry, String> cacheStreamer = ignite.dataStreamer(cacheName);
+
+
+       Affinity affinity = ignite.affinity(cacheName);
 
 
 
@@ -177,8 +182,8 @@ public class DataLoader {
                         //System.out.println(value);
                         //System.out.println("The geohash is: "+geoEntry.geoHash);
                         //System.out.println("Counter: "+counter);
-                        cache.put(geoEntry, strLine);
-
+                        //cache.put(geoEntry, strLine);
+                        cacheStreamer.addData(geoEntry, strLine);
                         //Thread.sleep(1000);
 
                        // Thread.sleep(1);

@@ -113,7 +113,7 @@ public class ClusterMasterX {
         // Setting the size of the default memory region to 80MB to achieve this.
         regionCfg.setInitialSize(
                 50L * 1024 * 1024);
-        regionCfg.setMaxSize(52224L * 1024 * 1024);
+        regionCfg.setMaxSize(52224L * 1024 * 1024); //52224L
         // Enable persistence for the region.
         regionCfg.setPersistenceEnabled(false);
         storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
@@ -511,7 +511,8 @@ public class ClusterMasterX {
                                                 partitionToKeyCount.remove(gcKey);
                                             }
                                             partitionToKeyCount.put(-1, keysCountInPartition);
-                                            partitionToKeyCount.put(-2, (long) metrics.getCurrentCpuLoad() * 100000);
+                                            System.out.println("CPU in each node: "+metrics.getCurrentCpuLoad());
+                                            partitionToKeyCount.put(-2, (long) (metrics.getCurrentCpuLoad() * 1000000000));
                                             partitionToKeyCount.put(-3, nonEmptyPartition);
                                             //System.out.println("The size from count is: "+(keysCountInPartition * 697.05/(1024*1024)));
                                                    /* System.out.println("Returning from local node: "+clusterWorker.id());
@@ -543,7 +544,10 @@ public class ClusterMasterX {
                             double totalMemoryUsed = (totalKeyCount * keyValuePairSize / (double) (1024 * 1024));
                             double memoryUsageProp = totalMemoryUsed / maxMemoryAllocated;
                             double rate = memoryUsageProp / (double) (System.currentTimeMillis() - startTimeInMilli);
-                            double cpuUsageProp = partIDToKeyCount.get(-2) / (double) 100000.0;
+
+                            System.out.println("Unprocessed CPU usage: "+partIDToKeyCount.get(-2));
+                            double cpuUsageProp = partIDToKeyCount.get(-2) / 1000000000.0;
+                            System.out.println("Processed CPU usage: "+cpuUsageProp);
                             System.out.println("--------------------------------------------------");
 
                             System.out.println("Stats: " + clusterWorker.id());
