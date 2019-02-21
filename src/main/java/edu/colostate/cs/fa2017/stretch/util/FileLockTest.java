@@ -1,8 +1,5 @@
 package edu.colostate.cs.fa2017.stretch.util;
 
-import org.apache.hadoop.yarn.webapp.hamlet.Hamlet;
-import scala.reflect.internal.Trees;
-
 import java.io.*;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;

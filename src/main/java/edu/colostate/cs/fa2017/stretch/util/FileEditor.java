@@ -26,7 +26,7 @@ public class FileEditor {
         String oldFileName = fileName;  //"./config/util/template.xml";
         String tmpFileName = fileName.replaceAll("Template", group); //"./config/util/test1.xml";
 
-        System.out.println(tmpFileName);
+        //System.out.println(tmpFileName);
 
 
         //Delete the config file, if exist
@@ -44,7 +44,7 @@ public class FileEditor {
             String[] place = placeHolder.split("##");
             String[] replace = replacement.split("##");
 
-            System.out.println("Lenght: "+place.length+" and: "+replace.length);
+            //System.out.println("Lenght: "+place.length+" and: "+replace.length);
             if(place.length!=replace.length){
                 System.out.println("UNeual length");
                 return "ERROR";
@@ -60,7 +60,7 @@ public class FileEditor {
                 if (index < len && line.contains(place[index])){
                     line = line.replace(place[index], replace[index]);
                     index++;
-                    System.out.println(index);
+                    //System.out.println(index);
                 }
                 bw.write(line+"\n");
             }
@@ -87,7 +87,7 @@ public class FileEditor {
         // And rename tmp file's name to old file name
 //        File newFile = new File(tmpFileName);
 //        newFile.renameTo(oldFile);
-        System.out.println("Return file: "+tmpFileName);
+        //System.out.println("Return file: "+tmpFileName);
         return tmpFileName;
 
 

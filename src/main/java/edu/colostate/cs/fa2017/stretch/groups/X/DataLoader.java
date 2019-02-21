@@ -74,13 +74,17 @@ public class DataLoader {
         cacheConfiguration.setOnheapCacheEnabled(false);
 
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
-        igniteConfiguration.setRebalanceThreadPoolSize(4);
+        igniteConfiguration.setSystemThreadPoolSize(16);
+        igniteConfiguration.setRebalanceThreadPoolSize(6);
 
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 64000);
+        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 10000);
         cacheConfiguration.setAffinity(stretchAffinityFunctionXX);
-        cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
+        cacheConfiguration.setRebalanceMode(CacheRebalanceMode.ASYNC);
+        cacheConfiguration.setRebalanceBatchSize(512 * 1024 * 2 * 10);
+        cacheConfiguration.setRebalanceBatchesPrefetchCount(4);
+
         cacheConfiguration.setStatisticsEnabled(true);
         //cacheConfiguration.setDataRegionName("default");
 
@@ -151,7 +155,8 @@ public class DataLoader {
         }
 
         System.out.println("Waiting");
-        Thread.sleep(10000);
+        Thread.sleep(2000);
+        System.out.println("Started...");
 
 
 

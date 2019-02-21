@@ -16,7 +16,6 @@ package edu.colostate.cs.fa2017.stretch.affinity;/*
  */
 
 
-import org.apache.hadoop.mapreduce.Cluster;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteLogger;
 import org.apache.ignite.cache.affinity.AffinityFunction;
@@ -26,13 +25,11 @@ import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.internal.processors.cache.GridCacheUtils;
 import org.apache.ignite.internal.util.typedef.internal.A;
 import org.apache.ignite.internal.util.typedef.internal.S;
-import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteBiPredicate;
 import org.apache.ignite.lang.IgniteBiTuple;
 import org.apache.ignite.resources.IgniteInstanceResource;
 import org.apache.ignite.resources.LoggerResource;
 import org.jetbrains.annotations.Nullable;
-import org.omg.PortableInterceptor.SYSTEM_EXCEPTION;
 
 import java.io.*;
 import java.nio.channels.Channels;
@@ -432,6 +429,24 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
         List<ClusterNode> lst = new ArrayList<>();
         int partitionsPerNode = 0;
         if(part < 1024){
+         /*   Map<String, ClusterNode> masterNodes = new TreeMap<>();
+            for(ClusterNode node: nodes){
+                if(node.attribute("role").toString().equalsIgnoreCase("master")){
+                    masterNodes.put(node.attribute("group").toString(), node);
+                    *//*if(masterNodes.size() == 3){
+                        break;
+                    }*//*
+                }
+            }
+            List<ClusterNode> masterList = new ArrayList<>(0);
+            for(Map.Entry<String, ClusterNode> entry: masterNodes.entrySet()){
+                System.out.println(entry.getValue());
+                masterList.add(entry.getValue());
+            }
+
+            partitionsPerNode = (int) Math.ceil(1024 / (double) masterNodes.size());
+            System.out.println(partitionsPerNode);
+            nodes = masterList;*/
             partitionsPerNode = (int) Math.ceil(1024 / (double) nodes.size());
         }
         else {
@@ -738,8 +753,9 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
             //Hotspot info coming via config xml
             String hotspot_partitions = newlyJoinedNode.attribute("hotspot-partitions"); //separated by commas
             String[] partitionsToMove = hotspot_partitions.split(",");
-            //System.out.println("Partitions to move: "+hotspot_partitions);
-            //System.out.println("Partitons to move: count "+partitionsToMove.length);
+
+            System.out.println("Partitions to move: "+hotspot_partitions);
+            System.out.println("Partitons to move: count "+partitionsToMove.length);
 
            //System.out.println("LEN: "+partitionsToMove.length);
 
@@ -772,7 +788,7 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
 
         }
 
-        //System.out.println(partitionsToMoveAscending);
+        System.out.println(partitionsToMoveAscending);
 
 
 
@@ -789,7 +805,7 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
 
         //System.out.println("flag: "+flag);
         int j = 0;
-        //System.out.println(parts);
+        System.out.println(parts);
         for (int i = 0; i < parts; i++) {
 
             if (flag && j < partitionsToMoveAscending.length) {

@@ -30,20 +30,22 @@ public class ClusterMasterZ {
 
     public static void main(String[] args){
 
-        if(args.length<2){
+        if(args.length<1){
             return;
         }
-        String groupName = args[0];
-        Integer numberOfMastersExpected = Integer.parseInt(args[1]);
+        String groupName = "Z";
+        //Integer numberOfMastersExpected = Integer.parseInt(args[1]);
 
         IgniteConfiguration igniteConfiguration = new IgniteConfiguration();
         CacheConfiguration cacheConfiguration = new CacheConfiguration();
         cacheConfiguration.setName(cacheName);
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 25000);
+        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 10000);
         cacheConfiguration.setAffinity(stretchAffinityFunctionXX);
-        cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
+        cacheConfiguration.setRebalanceMode(CacheRebalanceMode.ASYNC);
+        cacheConfiguration.setRebalanceBatchSize(512 * 1024 * 2 * 10);
+        cacheConfiguration.setRebalanceBatchesPrefetchCount(4);
 
 
 
@@ -65,12 +67,15 @@ public class ClusterMasterZ {
         storageCfg.setDefaultDataRegionConfiguration(regionCfg);
         // Applying the new configuration.
         igniteConfiguration.setDataStorageConfiguration(storageCfg);
-        igniteConfiguration.setRebalanceThreadPoolSize(4);
+        igniteConfiguration.setSystemThreadPoolSize(16);
+        igniteConfiguration.setRebalanceThreadPoolSize(6);
+
+
         Map<String, String> userAtt = new HashMap<String, String>() {{
             put("group",groupName);
             put("role", "master");
             put("donated","no");
-            put("region-max", "51200");
+            put("region-max", "49152");
             put("split","no");
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);

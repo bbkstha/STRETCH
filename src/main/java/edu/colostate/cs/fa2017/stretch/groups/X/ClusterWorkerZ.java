@@ -24,9 +24,11 @@ public class ClusterWorkerZ {
         cacheConfiguration.setName(cacheName);
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 25000);
+        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 10000);
         cacheConfiguration.setAffinity(stretchAffinityFunctionXX);
-        cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
+        cacheConfiguration.setRebalanceMode(CacheRebalanceMode.ASYNC);
+        cacheConfiguration.setRebalanceBatchSize(512 * 1024 * 2 * 10);
+        cacheConfiguration.setRebalanceBatchesPrefetchCount(4);
 
 
 
@@ -48,12 +50,14 @@ public class ClusterWorkerZ {
         storageCfg.setDefaultDataRegionConfiguration(regionCfg);
         // Applying the new configuration.
         igniteConfiguration.setDataStorageConfiguration(storageCfg);
-        igniteConfiguration.setRebalanceThreadPoolSize(4);
+        igniteConfiguration.setSystemThreadPoolSize(16);
+        igniteConfiguration.setRebalanceThreadPoolSize(6);
+
         Map<String, String> userAtt = new HashMap<String, String>() {{
-            put("group",args[0]);
+            put("group","Z");
             put("role", "worker");
             put("donated","no");
-            put("region-max", "51200");
+            put("region-max", "49152");
             put("split","no");
         }};
         igniteConfiguration.setCacheConfiguration(cacheConfiguration);
