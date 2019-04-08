@@ -57,8 +57,8 @@ public class DataLoader {
 //                250L * 1024 * 1024);
 
         //cfg.setDataStorageConfiguration(storageCfg);
-        storageCfg.setSystemRegionInitialSize(15L * 1024 * 1024);
-        storageCfg.setSystemRegionMaxSize(45L * 1024 * 1024);
+        storageCfg.setSystemRegionInitialSize(100L * 1024 * 1024);
+        storageCfg.setSystemRegionMaxSize(5000L * 1024 * 1024);
         storageCfg.setMetricsEnabled(true);
 
         // Setting the data region configuration.
@@ -101,7 +101,7 @@ public class DataLoader {
 
         }};
         igniteConfiguration.setUserAttributes(userAtt);
-        igniteConfiguration.setClientMode(true);
+        igniteConfiguration.setClientMode(false);
 
         // Start Ignite node.
         Ignite ignite = Ignition.start(igniteConfiguration);
@@ -155,8 +155,9 @@ public class DataLoader {
         }
 
         System.out.println("Waiting");
-        Thread.sleep(2000);
+        //Thread.sleep(2000);
         System.out.println("Started...");
+        long startTime = System.currentTimeMillis();
 
 
 
@@ -170,7 +171,7 @@ public class DataLoader {
                 while (( strLine= br.readLine()) != null) {
                     if (!strLine.startsWith("LAT")) {
 
-                        counter++;
+
                         //System.out.println(counter);
                         //strLine.split(",")[0].indexOf(".")
                         String[] eachColumn = strLine.split(",");
@@ -178,9 +179,9 @@ public class DataLoader {
                         double lon = Double.parseDouble(eachColumn[1]);
                         String timestamp = eachColumn[2]; //.substring(0, eachColumn[2].indexOf("."));
 
+                        counter++;
 
-
-                        GeoEntry geoEntry = new GeoEntry(lat, lon, 12, timestamp);
+                        //GeoEntry geoEntry = new GeoEntry(lat, lon, 12, timestamp);
                        /* String value = lat+","+lon+","+timestamp+",";
                         for(int i=3; i<eachColumn.length;i++)
                             value += eachColumn[i].substring(0, eachColumn[i].indexOf(".")+1)+",";*/
@@ -188,7 +189,7 @@ public class DataLoader {
                         //System.out.println("The geohash is: "+geoEntry.geoHash);
                         //System.out.println("Counter: "+counter);
                         //cache.put(geoEntry, strLine);
-                        cacheStreamer.addData(geoEntry, strLine);
+                        //cacheStreamer.addData(geoEntry, strLine);
                         //Thread.sleep(1000);
 
                        // Thread.sleep(1);
@@ -273,6 +274,10 @@ public class DataLoader {
                 }
             }
         System.out.println("The value of counter is: "+counter);
+        long endTime = System.currentTimeMillis();
+
+        System.out.println("The value of counter is: "+(endTime - startTime));
+
         System.out.println("-----------------------------------");
        // cache.destroy();
 

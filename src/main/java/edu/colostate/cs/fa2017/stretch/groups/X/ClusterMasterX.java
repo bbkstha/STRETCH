@@ -995,6 +995,7 @@ public class ClusterMasterX {
 
                                             if (!ignite.cache("GC-CACHE").containsKey(localParts[i])) {
                                                 Long keysCountInPartition = ignite.cache(cacheName).localSizeLong(localParts[i], CachePeekMode.OFFHEAP);
+                                                ignite.cluster().localNode().metrics().getCurrentWaitingJobs();
                                                 if (keysCountInPartition != 0) {
                                                     localCountToPart.put(localParts[i], keysCountInPartition);
                                                     totalKeys += keysCountInPartition;

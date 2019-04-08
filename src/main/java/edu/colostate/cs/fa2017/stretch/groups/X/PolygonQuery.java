@@ -198,20 +198,22 @@ private static final String cacheName = "STRETCH-CACHE";
         //System.out.println("The point lies within the polygon: "+queryPolygonToBeSent.contains(point.X(), point.Y()));
 
 
+        List<List<Cache.Entry>> allReturnedKV = new ArrayList<>();
+        long totalElementsWithinPolygon = 0;
 
         System.out.println(iteration);
-        //Runing the query multiple times
+        //Running the query multiple times
         for(long i = 0; i < iteration; i++) {
 
-            long totalElementsWithinPolygon = 0;
             for (Map.Entry<ClusterNode, List<Integer>> ent : intersectingPartitions.entrySet()) {
                 List<Integer> lst = ent.getValue();
-                totalElementsWithinPolygon += ignite.compute(ignite.cluster().forNode(ent.getKey())).apply(
-                        new IgniteClosure<List<Integer>, Long>() {
+                List<Cache.Entry> tmpList = ignite.compute(ignite.cluster().forNode(ent.getKey())).apply(
+                        new IgniteClosure<List<Integer>, List<Cache.Entry>>() {
                             @Override
-                            public Long apply(List<Integer> partitionList) {
+                            public List<Cache.Entry> apply(List<Integer> partitionList) {
                                 IgniteCache<DataLoader.GeoEntry, String> localCache = ignite.cache(cacheName);
                                 //System.out.println("Intersecting partition size:"+partitionList.size());
+                                List<Cache.Entry> returningKVList = new ArrayList<>();
                                 long sum = 0;
                                 for (int index = 0; index < partitionList.size(); index++) {
                                     ScanQuery scanQuery = new ScanQuery();
@@ -229,42 +231,61 @@ private static final String cacheName = "STRETCH-CACHE";
                                         //System.out.println("The point lies within the polygon: "+isPointInside);
 
                                         if (isPointInside) {
+                                            returningKVList.add(element);
                                             sum++;
                                             //System.out.println("The intermediate sum: "+sum);
                                         }
                                     }
                                 }
                                 System.out.println("The intersecting partitions sum: " + sum);
-                                return sum;
+                                return returningKVList;
                             }
                         },
                         lst
                 );
+                totalElementsWithinPolygon+=tmpList.size();
+                allReturnedKV.add(tmpList);
             }
+
             for (Map.Entry<ClusterNode, List<Integer>> ent1 : enclosedPartitions.entrySet()) {
                 List<Integer> lst1 = ent1.getValue();
-                totalElementsWithinPolygon += ignite.compute(ignite.cluster().forNode(ent1.getKey())).apply(
-                        new IgniteClosure<List<Integer>, Long>() {
+                List<Cache.Entry> tmpList= ignite.compute(ignite.cluster().forNode(ent1.getKey())).apply(
+                        new IgniteClosure<List<Integer>, List<Cache.Entry>>() {
                             @Override
-                            public Long apply(List<Integer> partitionList) {
+                            public List<Cache.Entry> apply(List<Integer> partitionList) {
 
-                                //System.out.println("Enclosure size: "+partitionList.size());
+                                Map<DataLoader.GeoEntry, String> returningKVMap = new HashMap<>();
+                                List<Cache.Entry> returningList = new ArrayList<>();
+                                IgniteCache<DataLoader.GeoEntry, String> localCache = ignite.cache(cacheName);
                                 long sum = 0;
                                 for (int i = 0; i < partitionList.size(); i++) {
+
+                                    ScanQuery scanQuery = new ScanQuery();
+                                    //System.out.println("Inside Scan query "+partitionList.get(index));
+                                    scanQuery.setPartition(partitionList.get(i));
+                                    // Execute the query.
+                                    Iterator<Cache.Entry<DataLoader.GeoEntry, String>> iterator1 = localCache.query(scanQuery).iterator();
+                                    while(iterator1.hasNext()){
+                                        //Cache.Entry<DataLoader.GeoEntry, String> element = iterator1.next();
+                                        returningList.add(iterator1.next());
+                                    }
                                     //System.out.println(partitionList.get(i));
                                     sum += ignite.cache(cacheName).localSizeLong(partitionList.get(i), CachePeekMode.OFFHEAP);
                                     //System.out.println("The partition to key count:");
                                 }
                                 System.out.println("The enclosed partitions sum:" + sum);
-                                return sum;
+                                return returningList;
                             }
                         },
                         lst1
                 );
+                totalElementsWithinPolygon+=tmpList.size();
+                allReturnedKV.add(tmpList);
             }
-            System.out.println("The total Elements within the given polygon is: "+totalElementsWithinPolygon);
+
         }
 
+        System.out.println("The total Elements within the given polygon is: "+totalElementsWithinPolygon);
         long end = System.currentTimeMillis();
 
 

@@ -248,30 +248,7 @@ public class StretchAffinityFunctionXX implements AffinityFunction, Serializable
     }
 
 
-
-
-
-
-
-
-
-
     /********************************************************/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
