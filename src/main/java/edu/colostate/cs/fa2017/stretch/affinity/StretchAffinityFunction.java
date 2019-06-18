@@ -1,78 +1,190 @@
-package edu.colostate.cs.fa2017.stretch.affinity;
+package edu.colostate.cs.fa2017.stretch.affinity;/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 
-import org.apache.ignite.Ignition;
-import org.apache.ignite.cache.affinity.Affinity;
+import org.apache.ignite.Ignite;
+import org.apache.ignite.IgniteLogger;
 import org.apache.ignite.cache.affinity.AffinityFunction;
 import org.apache.ignite.cache.affinity.AffinityFunctionContext;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.internal.processors.cache.GridCacheUtils;
 import org.apache.ignite.internal.util.typedef.internal.A;
-import org.apache.ignite.internal.util.typedef.internal.U;
+import org.apache.ignite.internal.util.typedef.internal.S;
+import org.apache.ignite.lang.IgniteBiPredicate;
 import org.apache.ignite.lang.IgniteBiTuple;
-import scala.Char;
+import org.apache.ignite.resources.IgniteInstanceResource;
+import org.apache.ignite.resources.LoggerResource;
+import org.jetbrains.annotations.Nullable;
 
-import java.io.Serializable;
+import java.io.*;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.util.*;
-import java.util.logging.Logger;
 
+/**
+ * Affinity function for partitioned cache based on Highest Random Weight algorithm.
+ * This function supports the following configuration:
+ * <ul>
+ * <li>
+ *      {@code partitions} - Number of partitions to spread across nodes.
+ * </li>
+ * <li>
+ *      {@code excludeNeighbors} - If set to {@code true}, will exclude same-host-neighbors
+ *      from being backups of each other. This flag can be ignored in cases when topology has no enough nodes
+ *      for assign backups.
+ *      Note that {@code backupFilter} is ignored if {@code excludeNeighbors} is set to {@code true}.
+ * </li>
+ * <li>
+ *      {@code backupFilter} - Optional filter for back up nodes. If provided, then only
+ *      nodes that pass this filter will be selected as backup nodes. If not provided, then
+ *      primary and backup nodes will be selected out of all nodes available for this cache.
+ * </li>
+ * </ul>
+ * <p>
+ * Cache affinity can be configured for individual caches via {@link CacheConfiguration#getAffinity()} method.
+ */
 public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
-    //public AffinityFunctionContext affinityFunctionContext;
-
-
-    private static Map<String, Integer> keyToPartitionMap = new HashMap<>();
-
-    private final static Logger LOGGER = Logger.getLogger(StretchAffinityFunction.class.getName());
-
-
+    //Added bbkstha
+    private static volatile Map<String, Integer> keyToPartitionMap = new HashMap<>();
+    private int precision = 0; //Hardcoded for testing
     private static final char[] base32 = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'b', 'c', 'd', 'e', 'f',
             'g', 'h', 'j', 'k', 'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z' };
 
-    private Map<String, Collection<ClusterNode>> subClusterInfo;
+
+    @IgniteInstanceResource
+    private Ignite ignite;
+
+    /***********************************/
+
+    /** */
+    private static final long serialVersionUID = 0L;
+
+    /** Default number of partitions. */
+    public static final int DFLT_PARTITION_COUNT = 10;
+
+    /** Comparator. */
+    private static final Comparator<IgniteBiTuple<Long, ClusterNode>> COMPARATOR = new HashComparator();
 
     /** Number of partitions. */
-    private int default_parts = 200;
-
-    private boolean exclNeighbors = false;
-
-
-    private int parts;
-
-    private int precision = 6;
-
-    private int added_precision = precision + 1;
-
-    private Map<String, Map<Long, ClusterNode>> clusterInfo = new TreeMap<String, Map<Long, ClusterNode>>();
-
+    private int parts = 1024+32;
 
     /** Mask to use in calculation when partitions count is power of 2. */
     private int mask = -1;
 
-    private static final Comparator<IgniteBiTuple<Long, ClusterNode>> COMPARATOR = new HashComparator();
-    private int totalNodes;
+    /** Exclude neighbors flag. */
+    private boolean exclNeighbors;
 
-    private static Map<Integer, Long> partitionToCount;
+    /** Exclude neighbors warning. */
+    private transient boolean exclNeighborsWarn;
 
+    /** Optional backup filter. First node is primary, second node is a node being tested. */
+    private IgniteBiPredicate<ClusterNode, ClusterNode> backupFilter;
 
+    /** Optional affinity backups filter. The first node is a node being tested,
+     *  the second is a list of nodes that are already assigned for a given partition (the first node in the list
+     *  is primary). */
+    private IgniteBiPredicate<ClusterNode, List<ClusterNode>> affinityBackupFilter;
+
+    /** Logger instance. */
+    @LoggerResource
+    private transient IgniteLogger log;
+
+    /**
+     * Empty constructor with all defaults.
+     */
     public StretchAffinityFunction() {
+        this(false);
+    }
+
+    /**
+     * Initializes affinity with flag to exclude same-host-neighbors from being backups of each other
+     * and specified number of backups.
+     * <p>
+     * Note that {@code backupFilter} is ignored if {@code excludeNeighbors} is set to {@code true}.
+     *
+     * @param exclNeighbors {@code True} if nodes residing on the same host may not act as backups
+     *      of each other.
+     */
+    public StretchAffinityFunction(boolean exclNeighbors) {
+        this(exclNeighbors, DFLT_PARTITION_COUNT);
+    }
+
+    /**
+     * Initializes affinity with flag to exclude same-host-neighbors from being backups of each other,
+     * and specified number of backups and partitions.
+     * <p>
+     * Note that {@code backupFilter} is ignored if {@code excludeNeighbors} is set to {@code true}.
+     *
+     * @param exclNeighbors {@code True} if nodes residing on the same host may not act as backups
+     *      of each other.
+     * @param parts Total number of partitions.
+     */
+    public StretchAffinityFunction(boolean exclNeighbors, int parts) {
+        this(exclNeighbors, parts, null);
+    }
+
+    /**
+     * Initializes optional counts for replicas and backups.
+     * <p>
+     * Note that {@code backupFilter} is ignored if {@code excludeNeighbors} is set to {@code true}.
+     *
+     * @param parts Total number of partitions.
+     * @param backupFilter Optional back up filter for nodes. If provided, backups will be selected
+     *      from all nodes that pass this filter. First argument for this filter is primary node, and second
+     *      argument is node being tested.
+     * <p>
+     * Note that {@code backupFilter} is ignored if {@code excludeNeighbors} is set to {@code true}.
+     */
+    public StretchAffinityFunction(int parts, @Nullable IgniteBiPredicate<ClusterNode, ClusterNode> backupFilter) {
+        this(false, parts, backupFilter);
+    }
+
+    /**
+     * Private constructor.
+     *
+     * @param exclNeighbors Exclude neighbors flag.
+     * @param parts Partitions count.
+     * @param backupFilter Backup filter.
+     */
+    private StretchAffinityFunction(boolean exclNeighbors, int parts,
+                                    IgniteBiPredicate<ClusterNode, ClusterNode> backupFilter) {
+        A.ensure(parts > 0, "parts > 0");
+
+        this.exclNeighbors = exclNeighbors;
+
+        setPartitions(parts);
+
+        this.backupFilter = backupFilter;
 
         initializeKeyToPartitionMap();
 
-
-
     }
+
+    /********************************************************/
+
 
     private void initializeKeyToPartitionMap(){
 
-        /*for(int i=0; i< base32.length; i++){
-            for(int j = 0; j< base32.length; j++){
-                String tmp = Character.toString(base32[i]);
-                tmp+=Character.toString(base32[j]);
-                keyToPartitionMap.put(tmp,Arrays.asList((32*i)+j));
-            }
-        }*/
+
+       // String path = "/s/chopin/b/grad/bbkstha/Softwares/apache-ignite-2.7.0-bin/STRETCH/KeyToPartitionMap-X.ser";
+        keyToPartitionMap = new HashMap<>();
         for(int i=0; i< base32.length; i++){
             for(int j = 0; j< base32.length; j++){
                 String tmp = Character.toString(base32[i]);
@@ -80,23 +192,37 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
                 keyToPartitionMap.put(tmp,(32*i)+j);
             }
         }
-
-
+        //System.out.println("Initialization done.");
     }
 
+    /********************************************************/
 
 
-//    public StretchAffinityFunction(int parts) {
-//
-//
-//        //LOGGER.warning("STRETCH_AFFINITY_FUNCTION!!!!!!!!!!!");
-//
-//        A.ensure(parts > 0, "parts > 0");
-//        setPartitions(parts);
-//        //this.subClusterInfo = subClusterInfo;
-//    }
 
+    /**
+     * Gets total number of key partitions. To ensure that all partitions are
+     * equally distributed across all nodes, please make sure that this
+     * number is significantly larger than a number of nodes. Also, partition
+     * size should be relatively small. Try to avoid having partitions with more
+     * than quarter million keys.
+     * <p>
+     * For fully replicated caches this method works the same way as a partitioned
+     * cache.
+     *
+     * @return Total partition count.
+     */
+    public int getPartitions() {
+        return parts;
+    }
 
+    /**
+     * Sets total number of partitions.If the number of partitions is a power of two,
+     * the PowerOfTwo hashing method will be used.  Otherwise the Standard hashing
+     * method will be applied.
+     *
+     * @param parts Total number of partitions.
+     * @return {@code this} for chaining.
+     */
     public StretchAffinityFunction setPartitions(int parts) {
         A.ensure(parts <= CacheConfiguration.MAX_PARTITIONS_COUNT,
                 "parts <= " + CacheConfiguration.MAX_PARTITIONS_COUNT);
@@ -109,849 +235,93 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
         return this;
     }
 
-
-
-
-
-
-
-    /** {@inheritDoc} */
-    @Override public void reset() {
-        // No-op.
+    /**
+     * Gets optional backup filter. If not {@code null}, backups will be selected
+     * from all nodes that pass this filter. First node passed to this filter is primary node,
+     * and second node is a node being tested.
+     * <p>
+     * Note that {@code backupFilter} is ignored if {@code excludeNeighbors} is set to {@code true}.
+     *
+     * @return Optional backup filter.
+     */
+    @Nullable public IgniteBiPredicate<ClusterNode, ClusterNode> getBackupFilter() {
+        return backupFilter;
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    /** {@inheritDoc} */
-    @Override public int partition(Object key) {
-        if (key == null)
-            throw new IllegalArgumentException("Null key is passed for a partition calculation. " +
-                    "Make sure that an affinity key that is used is initialized properly.");
-
-
-        String p = key.toString().substring(added_precision, added_precision + 1);
-        if (keyToPartitionMap.containsKey(p)) {
-
-            return keyToPartitionMap.get(p);
-        } else {
-            for (int k = added_precision + 2; k < key.toString().length(); k++) {
-
-                p += Character.toString(key.toString().charAt(k));
-                if (keyToPartitionMap.containsKey(p)) {
-                    return keyToPartitionMap.get(p);
-                }
-            }
-        }
-
-        return -1;
-    }
-       /*  //Testing
-        //return key.hashCode() % parts;
-        //Without considering masters: assuming all nodes as part of whole
-        int numberOfNodes = totalNodes;
-
-        String part = "";
-        part = "" + key.toString().toLowerCase().charAt(added_precision);
-
-        if (numberOfNodes > 32 && numberOfNodes <= 1024) {
-            added_precision++;
-            part = part + key.toString().toLowerCase().charAt(added_precision);
-        } else if (numberOfNodes > 1024 && numberOfNodes <= 32768) {
-            added_precision += 2;
-            part = part + key.toString().toLowerCase().charAt(added_precision - 1) + key.toString().toLowerCase().charAt(added_precision);
-        } else if (numberOfNodes > 32768) {
-            System.out.println("Too many nodes!!");
-            return -1;
-        }
-
-
-        //Assuming each cluster group has equal number of nodes at the start.
-        int charRangePerNode = (int) Math.round(Math.pow(32, (added_precision - precision)) / numberOfNodes); //1 for #nodes = 32, 2 for #nodes = 16, 16 for nodes = 64 (32^2/64)etc.
-
-        int length = part.length();
-
-        int sum = 0;
-
-        for (int i = 0; i < length; i++) {
-
-            for (int j = 0; j < base32.length; j++) {
-                length--;
-                if (part.charAt(i) == base32[j]) {
-
-                    sum += (Math.pow(32, length) * j);
-                }
-            }
-        }
-
-        int nodeIndex = (int) Math.floor(sum / charRangePerNode);
-
-        List<ClusterNode> lst = new ArrayList<>();
-        Iterator<String> it = clusterInfo.keySet().iterator();
-
-        while (it.hasNext()) {
-            Map<Long, ClusterNode> ser = clusterInfo.get(it.next());
-            Iterator<Map.Entry<Long, ClusterNode>> it1 = ser.entrySet().iterator();
-            while (it1.hasNext()) {
-                lst.add(it1.next().getValue());
-            }
-        }
-
-        //ClusterNode destinationNode = lst.get(nodeIndex);
-
-        int partitionsPerNode = parts / totalNodes;
-
-        int start = nodeIndex * partitionsPerNode;
-        //int end = (nodeIndex + 1) * partitionsPerNode - 1;
-        int partID = start + key.hashCode() % partitionsPerNode;
-
-        System.out.println("The key to partition map: key| " + key + " ==> partition| " + partID);
-//
-//        if(partitionToCount.containsKey(partID)){
-//
-//            partitionToCount.put(partID, partitionToCount.get(partID)+1);
-//        }
-//        else {
-//
-//            partitionToCount.put(partID, (long) 1);
-//        }
-
-        return U.safeAbs(partID);
-    }*/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    /*public Long getPartitionToKeyCount(int part){
-
-        return partitionToCount.get(part);
-    }
-*/
-
-        /*if (mask >= 0) {
-            int h;
-
-            return ((h = key.hashCode()) ^ (h >>> 16)) & mask;
-        }
-
-        return U.safeAbs(key.hashCode() % parts);*/
-//        char k = key.toString().charAt(0);
-//        int part = 0;
-//
-//        for (int i=0; i< base32.length; i++) {
-//            if (k == base32[i]) {
-//                part = i;
-//                break;
-//            }
-//        }
-        //LOGGER.warning("STRETCH_AFFINITY_FUNCTION!!!!!!!!!!!");
-        //LOGGER.warning("STRETCH_AFFINITY_FUNCTION!!!!!!!!!!!"+part);
-
-
-
-/*
-        int numberOfMasters = clusterInfo.size();
-
-        String part = "";
-        part = part + key.toString().toLowerCase().charAt(added_precision);
-
-        if(numberOfMasters >32 && numberOfMasters <= 1024){
-            added_precision++;
-            part = part + key.toString().toLowerCase().charAt(added_precision);
-        }
-        else if(numberOfMasters > 1024 && numberOfMasters <= 32768){
-            added_precision+=2;
-            part = part + key.toString().toLowerCase().charAt(added_precision-1) + key.toString().toLowerCase().charAt(added_precision);
-        }
-        else if(numberOfMasters > 32768){
-            System.out.println("Too many masters!!");
-            return -1;
-        }
-
-
-        int partitionsPerGroup = Math.round(parts/numberOfMasters);
-        int partitionsPerNode = Math.round(parts/totalNodes);
-
-        //Assuming each cluster group has equal number of nodes at the start.
-        int nodesPerGroup = totalNodes/numberOfMasters;
-        int charLenghtPerGroup = Math.round( (float) Math.pow(32, added_precision) / numberOfMasters); //1 for masters < 32, 2 for masters < 32*32, etc.
-
-        int length = part.length();
-
-        int sum = 0;
-
-        for(int i = 0; i< length; i++){
-
-            for (int j=0; j < base32.length; j++) {
-                length--;
-                if (base32[j] == part.charAt(i)) {
-
-                    sum += (Math.pow(32, length) * j);
-                }
-            }
-        }
-
-        sum++; //because sum is index so need to add one
-        int groupIndex = (int) Math.floor(sum / charLenghtPerGroup); //ClusterA -> 0 ;  ClusterB -> 1, etc
-
-
-
-        //Now find the appropriate node within the cluster group
-
-        Object clusterName =  clusterInfo.keySet().toArray()[groupIndex];
-        Map<Long, ClusterNode> servers = clusterInfo.get(clusterName);
-        int serversCount= servers.size();
-
-        String localPart = "";
-        part = part + key.toString().toLowerCase().charAt(added_precision);
-
-        if(numberOfMasters >32 && numberOfMasters <= 1024){
-            added_precision++;
-            part = part + key.toString().toLowerCase().charAt(added_precision);
-        }
-        else if(numberOfMasters > 1024 && numberOfMasters <= 32768){
-            added_precision+=2;
-            part = part + key.toString().toLowerCase().charAt(added_precision-1) + key.toString().toLowerCase().charAt(added_precision);
-        }
-        else if(numberOfMasters > 32768){
-            System.out.println("Too many masters!!");
-            return -1;
-        }
-*/
-        //partition within the range: nodeIndex * partitionsPerNode - (nodeIndex+1) * partitionsPerNode
-/*        Map<Long, ClusterNode> servers = clusterInfo.get(clusterName);
-        int serversCount= servers.size()
-        int charRangePerGroup = Math.round( (float) Math.pow(32, added_precision) / numberOfMasters); //assuming number of masters <=32
-
-        int length = part.length();
-
-        int sum = 0;
-
-        for(int i = 0; i< length; i++){
-
-            for (int j=0; j < base32.length; j++) {
-                length--;
-                if (base32[j] == part.charAt(i)) {
-
-                    sum += (Math.pow(32, length) * j);
-                }
-            }
-        }
-
-        sum++; //because sum is index so need to add one
-        int groupIndex = (int) Math.floor(sum / charRangePerGroup); //ClusterA -> 0 ;  ClusterB -> 1, etc
-
-
-
-
-
-
-
-
-
-        for (int i=0; i< base32.length; i++) {
-
-            if (base32[i] == part) {
-
-                int clusterGroupIndex = (int) Math.ceil(i/charRangePerGroup);
-
-                int start = nodesPerGroup * partitionsPerNode * (clusterGroupIndex -1);
-
-
-
-                while(index < numberOfMasters) {
-
-                    if (i >= index * charRangePerGroup && i < (index + 1) * charRangePerGroup) {
-                        //index determines the group (ClusterA, ClusterB, ...)
-
-
-                        Object clusterName =  clusterInfo.keySet().toArray()[index];
-                        Map<Long, ClusterNode> servers = clusterInfo.get(clusterName);
-                        int serversCount= servers.size();
-
-
-                        int charsPerNode = charRangePerGroup / serversCount;
-                        int partitionsPerNode = partitionsPerGroup/serversCount;
-
-                        if(charsPerNode < 1){
-
-                            int addedPre = 1;
-                            while(serversCount > charRangePerGroup * Math.pow(32, addedPre)) {
-                                addedPre++;
-                            }
-                            addedPre--;
-                           //int addedPre = Math.log10(serversCount)/Math.log10(32);
-                            charsPerNode =(int) Math.round(charRangePerGroup * Math.pow(32, addedPre) / serversCount);
-
-                            switch (addedPre) {
-                                case 1:
-                                    int p =  charsPerNode/32;
-
-
-                                    key.toString().charAt()
-
-
-
-                                    break;
-                                case 2:
-
-                                case 3:
-                                case 4:
-                            }
-                        }
-                        else if(charsPerNode > 1 ){
-
-                        }
-                        else if (charsPerNode == 1) {
-
-                            int nodeIndex = i % serversCount;
-
-                            int partiton = nodesPerGroup * partitionsPerNode * (nodeIndex -1);
-
-                            long nodeOrder = (long) servers.keySet().toArray()[nodeIndex-1];
-                            ClusterNode node = servers.get(nodeOrder);
-
-
-
-
-                            int localPrecision = (int) Math.floor(partitionsPerNode / 32);
-
-
-
-
-
-
-
-
-
-
-                        }
-                    }
-                    index++;
-                }
-
-                if (k == base32[i]) {
-                    part = i;
-                    break;
-                }
-            }
-        }
-        return part;*/
-
-
-    /** {@inheritDoc} */
-    @Override public int partitions() {
-        return parts;
-    }
-
-    /** {@inheritDoc} */
-    @Override public void removeNode(UUID nodeId) {
-        // No-op.
-    }
-
-    //public AffinityFunctionContext getAffinityFunctionContext() {
-//        return affinityFunctionContext;
-//    }
-
-    /** {@inheritDoc} */
-    @Override public List<List<ClusterNode>> assignPartitions(AffinityFunctionContext affCtx) {
-
-
-        //Number of partition is determined by the total nodes
-
-        if(affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED") && affCtx.discoveryEvent().eventNode().attribute("status").toString().equalsIgnoreCase("new")){
-            totalNodes = affCtx.currentTopologySnapshot().size();
-            parts = totalNodes * 32;
-        }
-
-        //keyToPartitionMap;
-
-
-
-
-
-
-        List<List<ClusterNode>> assignments = new ArrayList<>(parts);
-
-        List<ClusterNode> nodes = affCtx.currentTopologySnapshot();
-        Map<UUID, Collection<ClusterNode>> neighborhoodCache = exclNeighbors ?
-                GridCacheUtils.neighbors(affCtx.currentTopologySnapshot()) : null;
-
-
-        if (affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED")) {
-            System.out.println("Node Join case.");
-            ClusterNode newlyJoinedNode = affCtx.discoveryEvent().eventNode();
-            String donated = newlyJoinedNode.attribute("donated");
-            List<ClusterNode> newList = new ArrayList<>();
-            newList.add(newlyJoinedNode);
-            String[] partitionsToMove = null;
-            System.out.println("Is the node donated: " + donated);
-
-            if (donated.equals("yes")) {
-
-                System.out.println("The size of nodes is: " + nodes.size());
-                nodes.remove(newlyJoinedNode);
-                System.out.println("The size of nodes is: " + nodes.size());
-                System.out.println("ENtering partiton movement!");
-                //Hotspot info coming via config xml
-                String hotspot_partitions = newlyJoinedNode.attribute("hotspot_partitions"); //separated by commas
-                partitionsToMove = hotspot_partitions.split(",");
-                for (int k = 0; k < partitionsToMove.length; k++) {
-                    System.out.println("The donation made: " + partitionsToMove[k]);
-                }
-            }
-            boolean flag = donated.equals("yes");
-            int j = 0;
-            for (int i = 0; i < parts; i++) {
-                if (flag && j < partitionsToMove.length) {
-                    if (i == Integer.parseInt(partitionsToMove[j])) {
-                        List<ClusterNode> partAssignment = newList;
-                        j++;
-                        System.out.println("The node for moved partition id: " + i + " is: " + newlyJoinedNode);
-                        assignments.add(partAssignment);
-                    } else {
-                        //System.out.println("The node for moved partition id: " + i + " is: " + affCtx.previousAssignment(i));
-                        //assignments.add(affCtx.previousAssignment(i));
-                        List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups());
-                        assignments.add(partAssignment);
-                    }
-                } else {
-
-                    List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups());
-                    assignments.add(partAssignment);
-                }
-            }
-        }
-        return assignments;
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-           /*     System.out.println("ENtering partiton movement!");
-
-
-
-                //Hotspot info coming via config xml
-                String hotspot_partitions = newlyJoinedNode.attribute("hotspot_partitions"); //separated by commas
-                String[] partitionsToMove = hotspot_partitions.split(",");
-                for(int k =0; k< partitionsToMove.length; k++){
-                    System.out.println("The donation made: "+partitionsToMove[k]);
-
-                }
-
-                int j = 0;
-
-                for (int i = 0; i < parts; i++) {
-
-                    if(j<partitionsToMove.length){
-
-                        if (i == Integer.parseInt(partitionsToMove[j])) {
-                            assignments.add(newList);
-                            j++;
-                            System.out.println("The node for moved partition id: " + i + " is: " + newlyJoinedNode);
-
-                        }
-                        else {
-                            System.out.println("The node for moved partition id: " + i + " is: " + affCtx.previousAssignment(i));
-                            assignments.add(affCtx.previousAssignment(i));
-                        }
-                    }
-                    else {
-                        System.out.println("The node for moved partition id: " + i + " is: " + affCtx.previousAssignment(i));
-                        assignments.add(affCtx.previousAssignment(i));
-                    }
-                }
-
-                ///return assignments;
-            } else {
-
-                List<ClusterNode> lst = new ArrayList<>();
-                lst = affCtx.currentTopologySnapshot();
-                this.totalNodes = affCtx.currentTopologySnapshot().size();
-                int partitionsPerNode = parts / totalNodes;
-                for (int i = 0; i < parts; i++) {
-                    int index = 0;
-                    while (index < totalNodes) {
-                        if (i >= index * partitionsPerNode && i < (index + 1) * partitionsPerNode) {
-                            List<ClusterNode> partAssignment = new ArrayList<>(1);
-                            partAssignment.add(lst.get(index));
-                            System.out.println("The node for partition id: " + i + " is: " + lst.get(index));
-                            assignments.add(partAssignment);
-                            break;
-                        }
-                        index++;
-                    }
-                }
-            }
-            //return assignments;
-        }
-        return assignments;
-    }
-*/
-
-
-//                    Map<Integer, ClusterNode> highestActiveJobs = new TreeMap<>();
-//                    Map<Long, ClusterNode> nonheapUsed = new TreeMap<>();
-//                    Map<Double, ClusterNode> cpuUsed = new TreeMap<>();
-//                    Map<Double, ClusterNode> hotspot = new TreeMap<>();
-//                    Map<Long, ClusterNode> localClusterInfo = clusterInfo.get(group);
-//                    Iterator<Map.Entry<Long, ClusterNode>> it = localClusterInfo.entrySet().iterator();
-//                    while(it.hasNext()){
-//                        ClusterNode n = it.next().getValue();
-//                        if(n.id().toString()==hotspot_node){
-//
-//                        get
-//
-//
-//
-//                            break;
-//                        }
-//
-//
-//                        int a = n.metrics().getCurrentActiveJobs();
-//                        long b = n.metrics().getNonHeapMemoryUsed();
-//                        double c = n.metrics().getCurrentCpuLoad();
-//                        double contrib = a * 0.33 + b * 0.33 + c* 0.33;
-//                        hotspot.put(contrib, n);
-//                    }
-//                    ClusterNode hotspotNode = ((TreeMap<Double, ClusterNode>) hotspot).descendingMap().firstEntry().getValue();
-//                    // share partitions from the hotspot node to newly joined node.
-//                    Map.Entry<Integer, ClusterNode> integerClusterNodeEntry = ((TreeMap<Integer, ClusterNode>) highestActiveJobs).firstEntry();
-
-
-
-
-
-
-
-
- /*       List<List<ClusterNode>> assignments = new ArrayList<>(parts);
-        Map<Long, ClusterNode> map = new TreeMap<>();
-        List<ClusterNode> nodes = affCtx.currentTopologySnapshot();
-
-        for (ClusterNode node : nodes) {
-            String groupName = node.attribute("group");
-            //String role = node.attribute("role");
-            //String hostName = node.hostNames().iterator().next();
-            map.put(node.order(), node);
-            clusterInfo.put(groupName, map);
-        }
-
-        List<ClusterNode> lst = new ArrayList<>();
-        Iterator<String> it = clusterInfo.keySet().iterator();
-
-        while (it.hasNext()) {
-            Map<Long, ClusterNode> ser = clusterInfo.get(it.next());
-            Iterator<Map.Entry<Long, ClusterNode>> it1 = ser.entrySet().iterator();
-            while (it1.hasNext()) {
-                lst.add(it1.next().getValue());
-            }
-        }
-
-        this.totalNodes = affCtx.currentTopologySnapshot().size();
-        int partitionsPerNode = parts / totalNodes;
-        for (int i = 0; i < parts; i++) {
-            int index = 0;
-            while (index < totalNodes) {
-                if (i >= index * partitionsPerNode && i < (index + 1) * partitionsPerNode) {
-                    List<ClusterNode> partAssignment = new ArrayList<>(1);
-                    partAssignment.add(lst.get(index));
-                    System.out.println("The node for partition id: "+i+" is: "+lst.get(index));
-                    assignments.add(partAssignment);
-                    break;
-                }
-                index++;
-            }
-        }
-        return assignments;
-    }*/
-
-
-
-
-
-
-//        System.out.println("The topology version is: "+affCtx.currentTopologyVersion());
-//
-////
-//
-//        affCtx.discoveryEvent();
-//
-//       System.out.println("The discovery event short display is: "+affCtx.discoveryEvent().shortDisplay());
-//       System.out.println("The event is: "+affCtx.discoveryEvent().shortDisplay().split(":")[0]);
-//        System.out.println("Is the event: "+affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED"));
-//
-//
-////        if (!affCtx.discoveryEvent().equals(null)) {
-//            if (affCtx.discoveryEvent().shortDisplay().split(":")[0].equals("NODE_JOINED")) {
-//                System.out.println("Node Join case.");
-//
-//
-//                //ignite.affinity("MyCache");
-//
-//                ClusterNode newlyJoined = affCtx.discoveryEvent().eventNode();
-//                String group = newlyJoined.attribute("group");
-//                String hostName = newlyJoined.hostNames().iterator().next();
-//                List<ClusterNode> groupMembers = new ArrayList<>();
-//                List<ClusterNode> idleHost = new ArrayList<>();
-//
-//                for(ClusterNode node: affCtx.currentTopologySnapshot()){
-//                    if(node.attribute("group").equals(group) && !node.equals(newlyJoined)){
-//                        groupMembers.add(node);
-//                    }
-//                    else if(node.hostNames().iterator().next().equals(hostName)){
-//                        idleHost.add(node);
-//                    }
-//                }
-//
-//
-//
-//
-//
-//            }
-
-
-//            for (int j = 0; j < parts; j++) {
-//                List<ClusterNode> previousPartAssignment = affCtx.previousAssignment(j);
-//                assignments.add(previousPartAssignment);
-//            }
-//
-//
-//
-//            ClusterNode newlyJoined = affCtx.discoveryEvent().eventNode();
-//
-//            String newHost = newlyJoined.hostNames().iterator().next();
-//
-//
-//            Iterator<ClusterNode> it = affCtx.currentTopologySnapshot().iterator();
-//            while (it.hasNext()) {
-//                ClusterNode tmp = it.next();
-//                String tmpHost = tmp.hostNames().iterator().next();
-//
-//                if (tmpHost.equals(newHost) && !tmp.id().equals(newlyJoined.id())) {
-//
-//
-//                    //backup the older data
-//
-//                }
-//
-//
-//            }
-//
-//            return assignments;
-
-//            }
-
-
-
-
-
-
-
-
-        //LOGGER.warning("Logging an INFO-level message");
-        //LOGGER.warning("The discovery event short display is: "+affCtx.discoveryEvent().shortDisplay());
-
-
-        //nodes.get(0);
-
-//        Collection<ClusterNode> workerA = new ArrayList<ClusterNode>() {{
-//                    add(nodes.get(0));
-//                   // add(nodes.get(1));
-//                }};
-
-//        Collection<ClusterNode> workerB = new ArrayList<ClusterNode>() {{
-//            add(nodes.get(1));
-//            //add(nodes.get(3));
-//        }};
-
-       // subClusterInfo.put("A", workerA);
-       // subClusterInfo.put("B", workerB);
-
 
     /**
-     * Returns collection of nodes (primary first) for specified partition.
+     * Sets optional backup filter. If provided, then backups will be selected from all
+     * nodes that pass this filter. First node being passed to this filter is primary node,
+     * and second node is a node being tested.
+     * <p>
+     * Note that {@code backupFilter} is ignored if {@code excludeNeighbors} is set to {@code true}.
      *
-     * @param part Partition.
-     * @param nodes Nodes.
-     * @param backups Number of backups.
-     * @return Assignment.
+     * @param backupFilter Optional backup filter.
+     * @deprecated Use {@code affinityBackupFilter} instead.
+     * @return {@code this} for chaining.
      */
-    public List<ClusterNode> assignPartition(int part,
-                                             List<ClusterNode> nodes,
-                                             int backups) {
-        if (nodes.size() < 1)
-            return nodes;
+    @Deprecated
+    public StretchAffinityFunction setBackupFilter(
+            @Nullable IgniteBiPredicate<ClusterNode, ClusterNode> backupFilter) {
+        this.backupFilter = backupFilter;
 
-        final int primaryAndBackups = backups == Integer.MAX_VALUE ? nodes.size() : Math.min(backups + 1, nodes.size());
-        List<ClusterNode> res = new ArrayList<>(primaryAndBackups);
+        return this;
+    }
 
-        int partsPerNode = parts/nodes.size();
+    /**
+     * Gets optional backup filter. If not {@code null}, backups will be selected
+     * from all nodes that pass this filter. First node passed to this filter is a node being tested,
+     * and the second parameter is a list of nodes that are already assigned for a given partition (primary node is the first in the list).
+     * <p>
+     * Note that {@code affinityBackupFilter} is ignored if {@code excludeNeighbors} is set to {@code true}.
+     *
+     * @return Optional backup filter.
+     */
+    @Nullable public IgniteBiPredicate<ClusterNode, List<ClusterNode>> getAffinityBackupFilter() {
+        return affinityBackupFilter;
+    }
 
-        char[] groupName = {'A', 'B', 'C', 'D'};
+    /**
+     * Sets optional backup filter. If provided, then backups will be selected from all
+     * nodes that pass this filter. First node being passed to this filter is a node being tested,
+     * and the second parameter is a list of nodes that are already assigned for a given partition (primary node is the first in the list).
+     * <p>
+     * Note that {@code affinityBackupFilter} is ignored if {@code excludeNeighbors} is set to {@code true}.
+     * <p>
+     * //For an example filter, see {@link //ClusterNodeAttributeAffinityBackupFilter }.
+     *
+     * @param affinityBackupFilter Optional backup filter.
+     * @return {@code this} for chaining.
+     */
+    public StretchAffinityFunction setAffinityBackupFilter(
+            @Nullable IgniteBiPredicate<ClusterNode, List<ClusterNode>> affinityBackupFilter) {
+        this.affinityBackupFilter = affinityBackupFilter;
 
-//        for(int i = 0; i< subClusterInfo.size(); i++){
-//
-//            Collection<ClusterNode> nodesPerGroup = subClusterInfo.get(groupName[i]);
-//            Iterator<ClusterNode> it = nodesPerGroup.iterator();
-//            int partsPerGroup = partsPerNode * nodesPerGroup.size();
-//            for(int j=0; j< nodesPerGroup.size(); j++){
-//
-//                int min = j * partsPerNode;
-//                int max = (j+1) * partsPerNode;
-//                if(part>=min && part < max){
-//                    while(it.hasNext()){
-//
-//                        res.add(it.next());
-//                        break;
-//                    }
-//
-//                }
-//            }
-//        }
+        return this;
+    }
 
+    /**
+     * Checks flag to exclude same-host-neighbors from being backups of each other (default is {@code false}).
+     * <p>
+     * Note that {@code backupFilter} is ignored if {@code excludeNeighbors} is set to {@code true}.
+     *
+     * @return {@code True} if nodes residing on the same host may not act as backups of each other.
+     */
+    public boolean isExcludeNeighbors() {
+        return exclNeighbors;
+    }
 
-        int size = nodes.size();
+    /**
+     * Sets flag to exclude same-host-neighbors from being backups of each other (default is {@code false}).
+     * <p>
+     * Note that {@code backupFilter} is ignored if {@code excludeNeighbors} is set to {@code true}.
+     *
+     * @param exclNeighbors {@code True} if nodes residing on the same host may not act as backups of each other.
+     * @return {@code this} for chaining.
+     */
+    public StretchAffinityFunction setExcludeNeighbors(boolean exclNeighbors) {
+        this.exclNeighbors = exclNeighbors;
 
-        int index =  part % size;
-        System.out.println("The partition tp node map: part= "+part+" goes to node= "+nodes.get(index));
-
-        res.add(nodes.get(index));
-        return res;
-
-
-
-
-
-
-/*        IgniteBiTuple<Long, ClusterNode>[] hashArr =
-                (IgniteBiTuple<Long, ClusterNode> [])new IgniteBiTuple[nodes.size()];
-
-        for (int i = 0; i < nodes.size(); i++) {
-            ClusterNode node = nodes.get(i);
-
-            Object nodeHash = resolveNodeHash(node);
-
-            long hash = hash(nodeHash.hashCode(), part);
-
-            hashArr[i] = F.t(hash, node);
-        }
-
-
-
-        Iterable<ClusterNode> sortedNodes = new LazyLinearSortedContainer(hashArr, primaryAndBackups);
-
-        // REPLICATED cache case
-        if (backups == Integer.MAX_VALUE)
-            return replicatedAssign(nodes, sortedNodes);
-
-        Iterator<ClusterNode> it = sortedNodes.iterator();
-
-
-        Collection<ClusterNode> allNeighbors = new HashSet<>();
-
-        ClusterNode primary = it.next();
-
-        res.add(primary);
-
-        if (exclNeighbors)
-            allNeighbors.addAll(neighborhoodCache.get(primary.id()));
-
-        // Select backups.
-        if (backups > 0) {
-            while (it.hasNext() && res.size() < primaryAndBackups) {
-                ClusterNode node = it.next();
-
-                if (exclNeighbors) {
-                    if (!allNeighbors.contains(node)) {
-                        res.add(node);
-
-                        allNeighbors.addAll(neighborhoodCache.get(node.id()));
-                    }
-                }
-                else if ((backupFilter != null && backupFilter.apply(primary, node))
-                        || (affinityBackupFilter != null && affinityBackupFilter.apply(node, res))
-                        || (affinityBackupFilter == null && backupFilter == null) ) {
-                    res.add(node);
-
-                    if (exclNeighbors)
-                        allNeighbors.addAll(neighborhoodCache.get(node.id()));
-                }
-            }
-        }
-
-        if (res.size() < primaryAndBackups && nodes.size() >= primaryAndBackups && exclNeighbors) {
-            // Need to iterate again in case if there are no nodes which pass exclude neighbors backups criteria.
-            it = sortedNodes.iterator();
-
-            it.next();
-
-            while (it.hasNext() && res.size() < primaryAndBackups) {
-                ClusterNode node = it.next();
-
-                if (!res.contains(node))
-                    res.add(node);
-            }
-
-            if (!exclNeighborsWarn) {
-                LT.warn(log, "Affinity function excludeNeighbors property is ignored " +
-                                "because topology has no enough nodes to assign backups.",
-                        "Affinity function excludeNeighbors property is ignored " +
-                                "because topology has no enough nodes to assign backups.");
-
-                exclNeighborsWarn = true;
-            }
-        }
-
-        assert res.size() <= primaryAndBackups;
-
-        return res;*/
+        return this;
     }
 
     /**
@@ -964,6 +334,72 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
         return node.consistentId();
     }
 
+    /**
+     * Returns collection of nodes (primary first) for specified partition.
+     *
+     * @param part Partition.
+     * @param nodes Nodes.
+     * @param backups Number of backups.
+     * @param neighborhoodCache Neighborhood.
+     * @return Assignment.
+     */
+    public List<ClusterNode> assignPartition(int part,
+                                             List<ClusterNode> nodes,
+                                             int backups,
+                                             @Nullable Map<UUID, Collection<ClusterNode>> neighborhoodCache) {
+        if (nodes.size() == 1)
+            return nodes;
+
+        List<ClusterNode> lst = new ArrayList<>();
+        int partitionsPerNode = 0;
+        if(part < 1024){
+            partitionsPerNode = (int) Math.ceil(1024 / (double) nodes.size());
+        }
+        else {
+            partitionsPerNode = parts / nodes.size();
+        }
+
+        //System.out.println("The size of nodes: "+nodes.size()+" and partitionsPerNode: "+partitionsPerNode);
+        int index = 0;
+        while (index < nodes.size()) {
+
+            //System.out.println("The index size is: "+index + "and the parts is: "+part);
+            if (part >= index * partitionsPerNode && part < (index + 1) * partitionsPerNode) {
+
+                //System.out.println("Entered!");
+                    lst.add(nodes.get(index));
+                    break;
+                }
+            else{
+                index++;
+                //System.out.println("Increasing index size: "+index);
+            }
+        }
+        return lst;
+    }
+
+    /**
+     * Creates assignment for REPLICATED cache
+     *
+     * @param nodes Topology.
+     * @param sortedNodes Sorted for specified partitions nodes.
+     * @return Assignment.
+     */
+    private List<ClusterNode> replicatedAssign(List<ClusterNode> nodes, Iterable<ClusterNode> sortedNodes) {
+        ClusterNode primary = sortedNodes.iterator().next();
+
+        List<ClusterNode> res = new ArrayList<>(nodes.size());
+
+        res.add(primary);
+
+        for (ClusterNode n : nodes)
+            if (!n.equals(primary))
+                res.add(n);
+
+        assert res.size() == nodes.size() : "Not enough backups: " + res.size();
+
+        return res;
+    }
 
     /**
      * The pack partition number and nodeHash.hashCode to long and mix it by hash function based on the Wang/Jenkins
@@ -989,6 +425,214 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
         return key;
     }
 
+    /** {@inheritDoc} */
+    @Override public void reset() {
+        // No-op.
+    }
+
+    /** {@inheritDoc} */
+    @Override public int partitions() {
+        return parts;
+    }
+
+    /** {@inheritDoc} */
+    @Override public int partition(Object key) {
+        if (key == null)
+            throw new IllegalArgumentException("Null key is passed for a partition calculation. " +
+                    "Make sure that an affinity key that is used is initialized properly.");
+        //System.out.println("Key is "+key);
+        String p = key.toString().substring(precision, precision + 2);
+        //System.out.println("Portion of key is: "+p);
+        if (keyToPartitionMap.containsKey(p)) {
+            return keyToPartitionMap.get(p);
+        } else {
+            for (int k = precision + 2; k < key.toString().length(); k++) {
+
+                p += Character.toString(key.toString().charAt(k));
+                if (keyToPartitionMap.containsKey(p)) {
+                   //System.out.println("!!The key is: "+p+" and partition is: "+keyToPartitionMap.get(p));
+                    return keyToPartitionMap.get(p);
+                }
+            }
+        }
+       // System.out.println("The key is: "+p+" and partition is: -1");
+        return -1;
+    }
+
+    /** {@inheritDoc} */
+    @Override public List<List<ClusterNode>> assignPartitions(AffinityFunctionContext affCtx) {
+
+        String event = affCtx.discoveryEvent().shortDisplay().split(":")[0];
+        //System.out.println(event);
+        List<List<ClusterNode>> assignments = new ArrayList<>(parts);
+        Map<UUID, Collection<ClusterNode>> neighborhoodCache = exclNeighbors ?
+                GridCacheUtils.neighbors(affCtx.currentTopologySnapshot()) : null;
+
+        List<ClusterNode> nodes = affCtx.currentTopologySnapshot();
+
+        ClusterNode newlyJoinedNode = affCtx.discoveryEvent().eventNode();
+        int index=0;
+
+        for(int i=0; i<nodes.size(); i++){
+
+            if(nodes.get(i).equals(newlyJoinedNode)){
+                index = i;
+            }
+        }
+        String donated = newlyJoinedNode.attribute("donated");
+        String splitCall = newlyJoinedNode.attribute("split");
+        String newNodeID = newlyJoinedNode.id().toString();
+        System.out.println("New node id: "+newNodeID);
+        List<ClusterNode> splitNodeList = new ArrayList<>();
+
+        boolean splitFlag = splitCall.equalsIgnoreCase("yes");
+        int startSplit = -1;
+        int endSplit = -1;
+        int splitPartition = -1;
+
+        if(splitFlag){
+
+            startSplit = Integer.parseInt(newlyJoinedNode.attribute("startSplit"));
+            endSplit = Integer.parseInt(newlyJoinedNode.attribute("endSplit"));
+            String splitNodeID = newlyJoinedNode.attribute("node");
+            String path = newlyJoinedNode.attribute("map");
+            int previousSize = keyToPartitionMap.size();
+            Map<String, Integer> map = new HashMap<>();
+
+            try {
+                FileChannel channel1 = new RandomAccessFile(path, "rw").getChannel();
+                FileLock lock = channel1.lock(); //Lock the file. Block until release the lock
+                System.out.println("LOCKED IN AF.");
+                ObjectInputStream ois = new ObjectInputStream(Channels.newInputStream(channel1));
+                map = (HashMap<String, Integer>) ois.readObject();
+                System.out.println("UNLOCKED IN AF.");
+                keyToPartitionMap = map;
+                lock.release();
+                ois.close();
+                channel1.close();
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (ClassNotFoundException e) {
+                e.printStackTrace();
+            }
+
+            for(int k=0; k< nodes.size(); k++){
+                if(nodes.get(k).id().toString().equalsIgnoreCase(splitNodeID)){
+
+                    System.out.println("Added to splitList: "+nodes.get(k).id());
+                    splitNodeList.add(nodes.get(k));
+                    break;
+                }
+            }
+        }
+
+        List<ClusterNode> newList = new ArrayList<>();
+        //newList.add(newlyJoinedNode);
+        int[] partitionsToMoveAscending = null;
+        String causeOfHotspot = "M";
+
+        if (donated.equals("yes")) {
+
+            nodes.remove(newlyJoinedNode);
+            String hotspot_partitions = newlyJoinedNode.attribute("hotspot-partitions"); //separated by commas
+            String[] partitionsToMove = hotspot_partitions.split(",");
+            String idleNodeID = newlyJoinedNode.attribute("idle");
+            causeOfHotspot = newlyJoinedNode.attribute("cause");
+            //System.out.println("The idle node to use: "+idleNodeID);
+
+            for(int k=0; k< nodes.size(); k++){
+                if(nodes.get(k).id().toString().equals(idleNodeID)){
+                    //System.out.println("Added to newList: "+nodes.get(k).id());
+                    newList.add(nodes.get(k));
+                    break;
+                }
+            }
+
+            int[] partitionsToMoveAscending1 = new int[partitionsToMove.length];
+
+            for (int k = 0; k < partitionsToMove.length; k++) {
+                if(!partitionsToMove[k].isEmpty()){
+                    //System.out.println(""+k+". "+partitionsToMove[k].trim());
+                    partitionsToMoveAscending1[k] = Integer.parseInt(partitionsToMove[k].trim());
+                }
+            }
+
+            Arrays.sort(partitionsToMoveAscending1);
+            partitionsToMoveAscending = partitionsToMoveAscending1;
+        }
+
+        boolean flag = donated.equals("yes");
+        int j = 0;
+        System.out.println(parts);
+        for (int i = 0; i < parts; i++) {
+
+            if (flag && j < partitionsToMoveAscending.length) {
+                    if (i == partitionsToMoveAscending[j]) {
+
+                        j++;
+                        if(causeOfHotspot.equalsIgnoreCase("CM")){
+
+                            assignments.add(newList);
+                        }else if(causeOfHotspot.equalsIgnoreCase("C")){
+
+                            assignments.add(newList);
+                        }else if(causeOfHotspot.equalsIgnoreCase("M")){
+
+                            assignments.add(newList);
+                        }
+                    } else {
+
+                        if(event.equals("NODE_LEFT")){
+
+                            assignments.add(affCtx.previousAssignment(i));
+                        }
+                        else{
+
+                            List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups(), neighborhoodCache);
+                            assignments.add(partAssignment);
+                        }
+                    }
+            }
+            else if(splitFlag && (i>=startSplit && i<=endSplit)){
+
+                assignments.add(splitNodeList);
+                //System.out.println("The partitions "+i+" is set to: "+splitNodeList.get(0).id()+" from previous assignment: "+affCtx.previousAssignment(i).get(0).id());
+            }else{
+
+                if(event.equals("NODE_LEFT")){
+
+                    assignments.add(affCtx.previousAssignment(i));
+                }
+                else{
+
+                    List<ClusterNode> partAssignment = assignPartition(i, nodes, affCtx.backups(), neighborhoodCache);
+                    assignments.add(partAssignment);
+                }
+            }
+        }
+        return assignments;
+    }
+
+    /** {@inheritDoc} */
+    @Override public void removeNode(UUID nodeId) {
+        // No-op.
+    }
+
+    /**
+     *
+     */
+    private static class HashComparator implements Comparator<IgniteBiTuple<Long, ClusterNode>>, Serializable {
+        /** */
+        private static final long serialVersionUID = 0L;
+
+        /** {@inheritDoc} */
+        @Override public int compare(IgniteBiTuple<Long, ClusterNode> o1, IgniteBiTuple<Long, ClusterNode> o2) {
+            return o1.get1() < o2.get1() ? -1 : o1.get1() > o2.get1() ? 1 :
+                    o1.get2().id().compareTo(o2.get2().id());
+        }
+    }
 
     /**
      * Sorts the initial array with linear sort algorithm array
@@ -1016,7 +660,7 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
 
         /** {@inheritDoc} */
         @Override public Iterator<ClusterNode> iterator() {
-            return new LazyLinearSortedContainer.SortIterator();
+            return new SortIterator();
         }
 
         /**
@@ -1069,21 +713,8 @@ public class StretchAffinityFunction implements AffinityFunction, Serializable {
         }
     }
 
-    /**
-     *
-     */
-    private static class HashComparator implements Comparator<IgniteBiTuple<Long, ClusterNode>>, Serializable {
-        /** */
-        private static final long serialVersionUID = 0L;
-
-        /** {@inheritDoc} */
-        @Override public int compare(IgniteBiTuple<Long, ClusterNode> o1, IgniteBiTuple<Long, ClusterNode> o2) {
-            return o1.get1() < o2.get1() ? -1 : o1.get1() > o2.get1() ? 1 :
-                    o1.get2().id().compareTo(o2.get2().id());
-        }
+    /** {@inheritDoc} */
+    @Override public String toString() {
+        return S.toString(StretchAffinityFunction.class, this);
     }
-
-
-
-
 }

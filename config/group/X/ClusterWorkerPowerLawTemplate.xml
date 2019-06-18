@@ -15,7 +15,7 @@
 
                     <!-- Creating the affinity function with custom setting. -->
                     <!--<property name="affinity">
-                        <bean class="edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionXX">
+                        <bean class="edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunction
                             <property name="excludeNeighbors" value="false"/>
                             <property name="partitions" value="1056"/>
                         </bean>

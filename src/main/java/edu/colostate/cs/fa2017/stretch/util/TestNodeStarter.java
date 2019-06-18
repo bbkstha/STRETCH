@@ -1,6 +1,6 @@
 package edu.colostate.cs.fa2017.stretch.util;
 
-import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionX;
+import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunction;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.Ignition;
 import org.apache.ignite.cache.CacheMode;
@@ -27,8 +27,8 @@ public class TestNodeStarter {
         cacheConfiguration.setName("TEST");
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionX stretchAffinityFunctionX = new StretchAffinityFunctionX(false, 10);
-        cacheConfiguration.setAffinity(stretchAffinityFunctionX);
+        StretchAffinityFunction stretchAffinityFunction = new StretchAffinityFunction(false, 10);
+        cacheConfiguration.setAffinity(stretchAffinityFunction);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
 
         // Changing total RAM size to be used by Ignite Node.

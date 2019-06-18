@@ -1,6 +1,7 @@
-package edu.colostate.cs.fa2017.stretch.groups.X;
+package edu.colostate.cs.fa2017.stretch.query;
 
-import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunctionXX;
+import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunction;
+import edu.colostate.cs.fa2017.stretch.client.DataLoader;
 import edu.colostate.cs.fa2017.stretch.util.GeoHashProcessor.Coordinates;
 import edu.colostate.cs.fa2017.stretch.util.GeoHashProcessor.Point;
 import edu.colostate.cs.fa2017.stretch.util.GeoHashProcessor.SpatialRange;
@@ -87,8 +88,8 @@ private static final String cacheName = "STRETCH-CACHE";
         igniteConfiguration.setRebalanceThreadPoolSize(4);
         cacheConfiguration.setCacheMode(CacheMode.PARTITIONED);
 
-        StretchAffinityFunctionXX stretchAffinityFunctionXX = new StretchAffinityFunctionXX(false, 2048);
-        cacheConfiguration.setAffinity(stretchAffinityFunctionXX);
+        StretchAffinityFunction stretchAffinityFunction = new StretchAffinityFunction(false, 2048);
+        cacheConfiguration.setAffinity(stretchAffinityFunction);
         cacheConfiguration.setRebalanceMode(CacheRebalanceMode.SYNC);
         cacheConfiguration.setStatisticsEnabled(true);
         //cacheConfiguration.setDataRegionName("default");

@@ -19,7 +19,7 @@
 //
 //
 //
-//import edu.colostate.cs.fa2017.stretch.groups.X.DataLoader;
+//import edu.colostate.cs.fa2017.stretch.client.DataLoader;
 //import org.apache.ignite.spark.JavaIgniteContext;
 //import org.apache.ignite.spark.JavaIgniteRDD;
 //import org.apache.log4j.Level;

@@ -1,4 +1,4 @@
-package edu.colostate.cs.fa2017.stretch.groups.X;
+package edu.colostate.cs.fa2017.stretch.client;
 
 import java.util.HashMap;
 import java.util.Map;

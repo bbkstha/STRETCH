@@ -1,18 +1,13 @@
 package edu.colostate.cs.fa2017.stretch.util;
 
-import edu.colostate.cs.fa2017.stretch.affinity.StretchAffinityFunction;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteCache;
 import org.apache.ignite.Ignition;
-import org.apache.ignite.cache.CacheMode;
-import org.apache.ignite.cache.CacheRebalanceMode;
-import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 public class TestWorker {
 

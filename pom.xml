@@ -24,7 +24,7 @@
                     <archive>
                         <manifest>
                             <addClasspath>true</addClasspath>
-                            <mainClass>edu.colostate.cs.fa2017.stretch.client.GeoHashAsKey</mainClass>
+                            <mainClass>edu.colostate.cs.fa2017.stretch.client.DataLoader</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>
